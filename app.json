@@ -1,21 +1,21 @@
 {
   "expo": {
-    "name": "CookMaps",
-    "slug": "cookmaps",
+    "name": "CookMapz",
+    "slug": "cookmapz",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "cookmaps",
-    "userInterfaceStyle": "light",
+    "scheme": "cookmapz",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0B0B0C"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.cookmaps.app",
+      "bundleIdentifier": "com.cookmapz.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -23,9 +23,9 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#0B0B0C"
       },
-      "package": "com.cookmaps.app",
+      "package": "com.cookmapz.app",
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
@@ -36,7 +36,8 @@
     },
     "plugins": [
       "expo-dev-client",
-      "expo-system-ui"
+      "expo-system-ui",
+      "expo-font"
     ]
   }
 }
