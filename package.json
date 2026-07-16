@@ -13,7 +13,9 @@
     "prebuild": "expo prebuild",
     "typecheck": "tsc --noEmit",
     "seed:demo": "node scripts/seed_demo_content.mjs",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "deploy": "npm run export:web && wrangler deploy",
+    "preview": "npm run export:web && wrangler dev"
   },
   "dependencies": {
     "@expo-google-fonts/dm-sans": "^0.4.2",
@@ -52,7 +54,8 @@
     "@types/react": "~19.1.0",
     "eas-cli": "^19.0.8",
     "patch-package": "^8.0.0",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "wrangler": "^4.111.0"
   },
   "overrides": {
     "ajv": "^8.20.0",
