@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Image, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
+import { PickupMap } from '../../components/map/PickupMap';
 import { cookTheme } from '../../theme/cookTheme';
 import type { ClaimedPlate } from './types';
 
@@ -11,37 +12,9 @@ export function MapScreen({ plates }: Props) {
   return (
     <View className="flex-1" style={{ backgroundColor: cookTheme.bg }}>
       <View className="relative flex-1 overflow-hidden">
-        {/* Stylized map plane — pickup pins will wire to real maps later */}
-        <View
-          className="absolute inset-0"
-          style={{
-            backgroundColor: '#14181C',
-          }}
-        />
-        <View
-          className="absolute inset-0 opacity-40"
-          style={{
-            backgroundColor: 'transparent',
-            borderWidth: 0,
-          }}
-        />
-        {/* Grid suggestion */}
-        {Array.from({ length: 8 }).map((_, i) => (
-          <View
-            key={`h-${i}`}
-            className="absolute left-0 right-0 border-t border-white/5"
-            style={{ top: `${(i + 1) * 11}%` as `${number}%` }}
-          />
-        ))}
-        {Array.from({ length: 6 }).map((_, i) => (
-          <View
-            key={`v-${i}`}
-            className="absolute top-0 bottom-0 border-l border-white/5"
-            style={{ left: `${(i + 1) * 14}%` as `${number}%` }}
-          />
-        ))}
+        <PickupMap plates={plates} />
 
-        <View className="absolute left-6 top-8 right-6">
+        <View className="pointer-events-none absolute left-6 top-8 right-6">
           <Text className="text-[28px] text-white" style={{ fontFamily: 'Syne_800ExtraBold' }}>
             Pickup map
           </Text>
@@ -53,7 +26,7 @@ export function MapScreen({ plates }: Props) {
           </Text>
         </View>
 
-        {plates.length === 0 ? (
+        {plates.length === 0 && (
           <View className="absolute inset-0 items-center justify-center px-8">
             <View
               className="h-16 w-16 items-center justify-center rounded-full"
@@ -74,32 +47,6 @@ export function MapScreen({ plates }: Props) {
               Swipe Live, donate to a chef, and your pickup pin drops on this map.
             </Text>
           </View>
-        ) : (
-          plates.map((plate, index) => (
-            <View
-              key={plate.id}
-              className="absolute items-center"
-              style={{
-                top: `${28 + index * 14}%` as `${number}%`,
-                left: `${18 + (index % 3) * 22}%` as `${number}%`,
-              }}
-            >
-              <View className="overflow-hidden rounded-full border-2 border-white">
-                <Image source={{ uri: plate.stream.chefAvatar }} className="h-11 w-11" />
-              </View>
-              <View
-                className="mt-1 rounded-full px-2 py-0.5"
-                style={{ backgroundColor: cookTheme.accent }}
-              >
-                <Text
-                  className="text-[10px] text-white"
-                  style={{ fontFamily: 'DMSans_600SemiBold' }}
-                >
-                  ${plate.amount}
-                </Text>
-              </View>
-            </View>
-          ))
         )}
       </View>
 

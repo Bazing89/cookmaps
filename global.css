@@ -1,3 +1,26 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+  background: #0b0b0c;
+}
+
+/* TikTok-style snap feed on web */
+.web-feed-scroll {
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.web-feed-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.web-feed-item {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}

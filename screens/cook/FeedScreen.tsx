@@ -1,6 +1,9 @@
 import { useCallback, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
+  Platform,
+  Text,
   View,
   useWindowDimensions,
   type NativeScrollEvent,
@@ -9,7 +12,7 @@ import {
 } from 'react-native';
 import { DonateSheet } from '../../components/cook/DonateSheet';
 import { LiveFeedCard } from '../../components/cook/LiveFeedCard';
-import { LIVE_STREAMS } from '../../data/lives';
+import { useFeedVideos } from '../../hooks/useFeedVideos';
 import { cookTheme } from '../../theme/cookTheme';
 import type { LiveStream } from '../../types/live';
 
@@ -19,6 +22,7 @@ type Props = {
 
 export function FeedScreen({ onDonated }: Props) {
   const { height: windowHeight } = useWindowDimensions();
+  const { streams, loading, error } = useFeedVideos();
   const [activeIndex, setActiveIndex] = useState(0);
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [donateStream, setDonateStream] = useState<LiveStream | null>(null);
@@ -51,8 +55,31 @@ export function FeedScreen({ onDonated }: Props) {
       style={{ backgroundColor: cookTheme.bg }}
       onLayout={(e) => setFeedHeight(e.nativeEvent.layout.height)}
     >
+      {loading && streams.length === 0 ? (
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color={cookTheme.accent} />
+        </View>
+      ) : error && streams.length === 0 ? (
+        <View className="flex-1 items-center justify-center px-8">
+          <Text
+            className="text-center text-[15px] text-white/80"
+            style={{ fontFamily: 'DMSans_500Medium' }}
+          >
+            {error}
+          </Text>
+        </View>
+      ) : streams.length === 0 ? (
+        <View className="flex-1 items-center justify-center px-8">
+          <Text
+            className="text-center text-[15px] text-white/80"
+            style={{ fontFamily: 'DMSans_500Medium' }}
+          >
+            No videos in your Bunny Stream library yet.
+          </Text>
+        </View>
+      ) : (
       <FlatList
-        data={LIVE_STREAMS}
+        data={streams}
         keyExtractor={(item) => item.id}
         pagingEnabled
         showsVerticalScrollIndicator={false}
@@ -60,6 +87,7 @@ export function FeedScreen({ onDonated }: Props) {
         snapToInterval={feedHeight}
         snapToAlignment="start"
         disableIntervalMomentum
+        className={Platform.OS === 'web' ? 'web-feed-scroll' : undefined}
         getItemLayout={(_, index) => ({
           length: feedHeight,
           offset: feedHeight * index,
@@ -69,16 +97,19 @@ export function FeedScreen({ onDonated }: Props) {
         viewabilityConfig={viewabilityConfig}
         onMomentumScrollEnd={onMomentumScrollEnd}
         renderItem={({ item, index }) => (
-          <LiveFeedCard
-            stream={item}
-            height={feedHeight}
-            isActive={index === activeIndex}
-            liked={likedIds.has(item.id)}
-            onToggleLike={() => toggleLike(item.id)}
-            onDonate={() => setDonateStream(item)}
-          />
+          <View className={Platform.OS === 'web' ? 'web-feed-item' : undefined}>
+            <LiveFeedCard
+              stream={item}
+              height={feedHeight}
+              isActive={index === activeIndex}
+              liked={likedIds.has(item.id)}
+              onToggleLike={() => toggleLike(item.id)}
+              onDonate={() => setDonateStream(item)}
+            />
+          </View>
         )}
       />
+      )}
 
       <DonateSheet
         visible={donateStream != null}

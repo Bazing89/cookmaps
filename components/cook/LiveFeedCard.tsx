@@ -1,17 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useRef, useState } from 'react';
-import {
-  Animated,
-  Image,
-  Pressable,
-  Text,
-  View,
-  type LayoutChangeEvent,
-} from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Animated, Image, Pressable, Text, View } from 'react-native';
 import { formatCount } from '../../data/lives';
+import { useWebLayout } from '../../hooks/useWebLayout';
+import { resolveStreamThumbnail } from '../../lib/bunnyStream';
 import { cookTheme } from '../../theme/cookTheme';
 import type { LiveStream } from '../../types/live';
+import { FeedVideoPlayer } from './FeedVideoPlayer';
 
 type Props = {
   stream: LiveStream;
@@ -27,24 +23,187 @@ function ActionButton({
   label,
   onPress,
   tint,
+  webDesktop = false,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
   tint?: string;
+  webDesktop?: boolean;
 }) {
+  if (webDesktop) {
+    return (
+      <Pressable onPress={onPress} className="mb-5 items-center" hitSlop={8}>
+        <View
+          className="h-12 w-12 items-center justify-center rounded-full"
+          style={{ backgroundColor: 'rgba(255,255,255,0.08)' }}
+        >
+          <Ionicons name={icon} size={24} color={tint ?? '#fff'} />
+        </View>
+        <Text className="mt-1 text-[12px] text-white/90" style={{ fontFamily: 'DMSans_600SemiBold' }}>
+          {label}
+        </Text>
+      </Pressable>
+    );
+  }
+
   return (
-    <Pressable onPress={onPress} className="mb-5 items-center" hitSlop={8}>
-      <View className="h-12 w-12 items-center justify-center rounded-full bg-black/35">
-        <Ionicons name={icon} size={26} color={tint ?? '#fff'} />
+    <Pressable onPress={onPress} className="mb-4 items-center" hitSlop={8}>
+      <View className="h-11 w-11 items-center justify-center">
+        <Ionicons name={icon} size={30} color={tint ?? '#fff'} />
       </View>
       <Text
-        className="mt-1 text-[11px] font-semibold text-white"
-        style={{ fontFamily: 'DMSans_600SemiBold' }}
+        className="text-[11px] text-white"
+        style={{
+          fontFamily: 'DMSans_600SemiBold',
+          textShadowColor: 'rgba(0,0,0,0.75)',
+          textShadowOffset: { width: 0, height: 1 },
+          textShadowRadius: 3,
+        }}
       >
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+function CaptionBlock({
+  stream,
+  pulse,
+  onDonate,
+  overlay = true,
+}: {
+  stream: LiveStream;
+  pulse: Animated.Value;
+  onDonate: () => void;
+  overlay?: boolean;
+}) {
+  const caption = [stream.dishName, stream.dishDescription].filter(Boolean).join(' · ');
+
+  return (
+    <View className={overlay ? 'absolute bottom-3 left-0 right-16 z-10 px-3' : 'absolute bottom-3 left-0 right-0 z-10 px-3'}>
+      <View className="mb-1.5 flex-row items-center gap-2">
+        {stream.isLive ? (
+          <View
+            className="flex-row items-center rounded px-1.5 py-0.5"
+            style={{ backgroundColor: cookTheme.live }}
+          >
+            <Animated.View
+              style={{
+                transform: [{ scale: pulse }],
+                width: 6,
+                height: 6,
+                borderRadius: 3,
+                backgroundColor: '#fff',
+                marginRight: 4,
+              }}
+            />
+            <Text className="text-[10px] font-bold text-white" style={{ fontFamily: 'DMSans_600SemiBold' }}>
+              LIVE
+            </Text>
+          </View>
+        ) : null}
+        <Text
+          className="text-[14px] text-white"
+          style={{
+            fontFamily: 'DMSans_600SemiBold',
+            ...(overlay
+              ? {
+                  textShadowColor: 'rgba(0,0,0,0.8)',
+                  textShadowOffset: { width: 0, height: 1 },
+                  textShadowRadius: 4,
+                }
+              : {}),
+          }}
+        >
+          {stream.chefHandle}
+        </Text>
+      </View>
+
+      <Text
+        className="text-[14px] leading-5 text-white"
+        style={{
+          fontFamily: 'DMSans_400Regular',
+          ...(overlay
+            ? {
+                textShadowColor: 'rgba(0,0,0,0.8)',
+                textShadowOffset: { width: 0, height: 1 },
+                textShadowRadius: 4,
+              }
+            : {}),
+        }}
+        numberOfLines={2}
+      >
+        {caption}
+      </Text>
+
+      <Pressable onPress={onDonate} className="mt-2 flex-row items-center self-start">
+        <Ionicons name="location-outline" size={13} color="#fff" />
+        <Text
+          className="ml-1 text-[12px] text-white/90"
+          style={{
+            fontFamily: 'DMSans_500Medium',
+            ...(overlay
+              ? {
+                  textShadowColor: 'rgba(0,0,0,0.8)',
+                  textShadowOffset: { width: 0, height: 1 },
+                  textShadowRadius: 4,
+                }
+              : {}),
+          }}
+          numberOfLines={1}
+        >
+          {stream.pickupNeighborhood} · {stream.distanceMiles} mi · claim ${stream.minDonation}+
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function ActionRail({
+  stream,
+  liked,
+  onToggleLike,
+  onDonate,
+  webDesktop = false,
+}: {
+  stream: LiveStream;
+  liked: boolean;
+  onToggleLike: () => void;
+  onDonate: () => void;
+  webDesktop?: boolean;
+}) {
+  return (
+    <View className={webDesktop ? 'ml-5 items-center pt-2' : 'absolute bottom-28 right-2 z-10 items-center'}>
+      <Pressable onPress={onDonate} className="mb-4 items-center" hitSlop={8}>
+        <View className="overflow-hidden rounded-full border-2 border-white">
+          <Image source={{ uri: stream.chefAvatar }} className="h-12 w-12" />
+        </View>
+        <View
+          className="-mt-2.5 h-5 w-5 items-center justify-center rounded-full"
+          style={{ backgroundColor: cookTheme.accent }}
+        >
+          <Ionicons name="add" size={13} color="#fff" />
+        </View>
+      </Pressable>
+
+      <ActionButton
+        icon={liked ? 'heart' : 'heart-outline'}
+        label={formatCount(stream.likeCount + (liked ? 1 : 0))}
+        onPress={onToggleLike}
+        tint={liked ? cookTheme.live : '#fff'}
+        webDesktop={webDesktop}
+      />
+      <ActionButton icon="chatbubble-ellipses-outline" label="Ask" onPress={onDonate} webDesktop={webDesktop} />
+      <ActionButton
+        icon="gift-outline"
+        label={`$${stream.minDonation}`}
+        onPress={onDonate}
+        tint="#fff"
+        webDesktop={webDesktop}
+      />
+      <ActionButton icon="share-social-outline" label="Share" onPress={() => {}} webDesktop={webDesktop} />
+    </View>
   );
 }
 
@@ -56,8 +215,8 @@ export function LiveFeedCard({
   onToggleLike,
   onDonate,
 }: Props) {
+  const { isDesktop, videoHeight, videoWidth } = useWebLayout();
   const pulse = useRef(new Animated.Value(1)).current;
-  const [progressWidth, setProgressWidth] = useState(0);
 
   useEffect(() => {
     if (!isActive) {
@@ -66,7 +225,7 @@ export function LiveFeedCard({
     }
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1.18, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1.2, duration: 700, useNativeDriver: true }),
         Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
       ]),
     );
@@ -74,190 +233,69 @@ export function LiveFeedCard({
     return () => loop.stop();
   }, [isActive, pulse]);
 
-  const progress = Math.min(1, stream.donationRaised / stream.donationGoal);
+  const posterUri = resolveStreamThumbnail(
+    stream.coverImage,
+    stream.bunnyVideoId,
+    stream.thumbnailUrl,
+  );
 
-  const onProgressLayout = (e: LayoutChangeEvent) => {
-    setProgressWidth(e.nativeEvent.layout.width);
-  };
+  if (isDesktop) {
+    return (
+      <View
+        style={{ height, backgroundColor: cookTheme.bg }}
+        className="w-full items-center justify-center"
+      >
+        <View className="flex-row items-end">
+          <View
+            style={{
+              width: videoWidth,
+              height: videoHeight,
+              borderRadius: 12,
+              overflow: 'hidden',
+              backgroundColor: '#000',
+            }}
+          >
+            <FeedVideoPlayer stream={stream} isActive={isActive} posterUri={posterUri} />
+            <LinearGradient
+              colors={['transparent', 'transparent', 'rgba(0,0,0,0.55)']}
+              locations={[0, 0.72, 1]}
+              pointerEvents="none"
+              style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+            />
+            <CaptionBlock stream={stream} pulse={pulse} onDonate={onDonate} overlay={false} />
+          </View>
+
+          <ActionRail
+            stream={stream}
+            liked={liked}
+            onToggleLike={onToggleLike}
+            onDonate={onDonate}
+            webDesktop
+          />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={{ height, backgroundColor: cookTheme.bg }} className="w-full overflow-hidden">
-      <Image
-        source={{ uri: stream.coverImage }}
-        className="absolute inset-0 h-full w-full"
-        resizeMode="cover"
-      />
+      <FeedVideoPlayer stream={stream} isActive={isActive} posterUri={posterUri} />
 
-      {/* Atmosphere wash — kitchen heat, not flat black */}
       <LinearGradient
-        colors={['rgba(11,11,12,0.35)', 'transparent', 'transparent', 'rgba(11,11,12,0.92)']}
-        locations={[0, 0.22, 0.48, 1]}
-        style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
-      />
-      <LinearGradient
-        colors={['transparent', 'rgba(255,77,26,0.18)']}
-        start={{ x: 0.2, y: 0.3 }}
-        end={{ x: 1, y: 1 }}
+        colors={['transparent', 'transparent', 'rgba(0,0,0,0.55)']}
+        locations={[0, 0.72, 1]}
+        pointerEvents="none"
         style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
       />
 
-      {/* Top meta */}
-      <View className="absolute left-4 right-4 top-3 z-10 flex-row items-center justify-between">
-        <View className="flex-row items-center gap-2">
-          <View className="flex-row items-center rounded-md bg-black/45 px-2.5 py-1.5">
-            <Animated.View
-              style={{
-                transform: [{ scale: pulse }],
-                width: 7,
-                height: 7,
-                borderRadius: 4,
-                backgroundColor: cookTheme.live,
-                marginRight: 6,
-              }}
-            />
-            <Text
-              className="text-[11px] tracking-widest text-white"
-              style={{ fontFamily: 'Syne_700Bold' }}
-            >
-              LIVE
-            </Text>
-          </View>
-          <View className="rounded-md bg-black/45 px-2.5 py-1.5">
-            <Text
-              className="text-[11px] text-white/90"
-              style={{ fontFamily: 'DMSans_500Medium' }}
-            >
-              {formatCount(stream.viewerCount)} watching
-            </Text>
-          </View>
-        </View>
-        <Text
-          className="text-[15px] tracking-tight text-white"
-          style={{ fontFamily: 'Syne_800ExtraBold' }}
-        >
-          CookMapz
-        </Text>
-      </View>
+      <ActionRail
+        stream={stream}
+        liked={liked}
+        onToggleLike={onToggleLike}
+        onDonate={onDonate}
+      />
 
-      {/* Right action rail */}
-      <View className="absolute bottom-36 right-3 z-10 items-center">
-        <Pressable onPress={onDonate} className="mb-5 items-center">
-          <View className="overflow-hidden rounded-full border-2 border-white">
-            <Image source={{ uri: stream.chefAvatar }} className="h-12 w-12" />
-          </View>
-          <View
-            className="-mt-2 h-5 w-5 items-center justify-center rounded-full"
-            style={{ backgroundColor: cookTheme.accent }}
-          >
-            <Ionicons name="add" size={14} color="#fff" />
-          </View>
-        </Pressable>
-
-        <ActionButton
-          icon={liked ? 'heart' : 'heart-outline'}
-          label={formatCount(stream.likeCount + (liked ? 1 : 0))}
-          onPress={onToggleLike}
-          tint={liked ? cookTheme.live : '#fff'}
-        />
-        <ActionButton icon="chatbubble-ellipses-outline" label="Ask" onPress={onDonate} />
-        <ActionButton
-          icon="flame"
-          label={`$${stream.minDonation}+`}
-          onPress={onDonate}
-          tint={cookTheme.accentSoft}
-        />
-        <ActionButton icon="share-social-outline" label="Share" onPress={() => {}} />
-      </View>
-
-      {/* Bottom info */}
-      <View className="absolute bottom-0 left-0 right-16 z-10 px-4 pb-5">
-        <Text
-          className="text-[13px] text-white/80"
-          style={{ fontFamily: 'DMSans_500Medium' }}
-        >
-          {stream.chefName} · {stream.chefHandle}
-        </Text>
-        <Text
-          className="mt-1 text-[26px] leading-8 text-white"
-          style={{ fontFamily: 'Syne_800ExtraBold' }}
-        >
-          {stream.dishName}
-        </Text>
-        <Text
-          className="mt-1.5 text-[13px] leading-5 text-white/85"
-          style={{ fontFamily: 'DMSans_400Regular' }}
-          numberOfLines={2}
-        >
-          {stream.dishDescription}
-        </Text>
-
-        <View className="mt-3 flex-row flex-wrap items-center gap-2">
-          <View className="flex-row items-center rounded-full bg-white/12 px-2.5 py-1">
-            <Ionicons name="location-outline" size={13} color="#fff" />
-            <Text
-              className="ml-1 text-[11px] text-white"
-              style={{ fontFamily: 'DMSans_500Medium' }}
-            >
-              {stream.pickupNeighborhood} · {stream.distanceMiles} mi
-            </Text>
-          </View>
-          <View className="rounded-full bg-white/12 px-2.5 py-1">
-            <Text
-              className="text-[11px] text-white"
-              style={{ fontFamily: 'DMSans_500Medium' }}
-            >
-              Ready in ~{stream.readyInMinutes}m
-            </Text>
-          </View>
-          <View className="rounded-full bg-white/12 px-2.5 py-1">
-            <Text
-              className="text-[11px] text-white"
-              style={{ fontFamily: 'DMSans_500Medium' }}
-            >
-              {stream.cuisine}
-            </Text>
-          </View>
-        </View>
-
-        {/* Donation progress → unlocks pickup */}
-        <Pressable
-          onPress={onDonate}
-          className="mt-4 overflow-hidden rounded-2xl border border-white/15 bg-black/40 px-3.5 py-3"
-        >
-          <View className="mb-2 flex-row items-center justify-between">
-            <Text
-              className="text-[12px] text-white"
-              style={{ fontFamily: 'DMSans_600SemiBold' }}
-            >
-              Donate to claim a plate
-            </Text>
-            <Text
-              className="text-[12px]"
-              style={{ fontFamily: 'DMSans_600SemiBold', color: cookTheme.accentSoft }}
-            >
-              ${stream.donationRaised} / ${stream.donationGoal}
-            </Text>
-          </View>
-          <View
-            onLayout={onProgressLayout}
-            className="h-1.5 overflow-hidden rounded-full bg-white/20"
-          >
-            <View
-              className="h-full rounded-full"
-              style={{
-                width: progressWidth * progress,
-                backgroundColor: cookTheme.accent,
-              }}
-            />
-          </View>
-          <Text
-            className="mt-2 text-[11px] text-white/70"
-            style={{ fontFamily: 'DMSans_400Regular' }}
-          >
-            {stream.pickupAddress} · pickup after donate
-          </Text>
-        </Pressable>
-      </View>
+      <CaptionBlock stream={stream} pulse={pulse} onDonate={onDonate} />
     </View>
   );
 }

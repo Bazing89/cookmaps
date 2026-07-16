@@ -15,7 +15,7 @@ const TABS: {
   icon: keyof typeof Ionicons.glyphMap;
   activeIcon: keyof typeof Ionicons.glyphMap;
 }[] = [
-  { id: 'live', label: 'Live', icon: 'play-outline', activeIcon: 'play' },
+  { id: 'live', label: 'For You', icon: 'play-outline', activeIcon: 'play' },
   { id: 'map', label: 'Map', icon: 'map-outline', activeIcon: 'map' },
   { id: 'go-live', label: 'Cook', icon: 'radio-outline', activeIcon: 'radio' },
   { id: 'orders', label: 'Plates', icon: 'bag-handle-outline', activeIcon: 'bag-handle' },

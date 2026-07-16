@@ -17,6 +17,8 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Platform, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomNav } from './components/cook/BottomNav';
+import { SideNav } from './components/cook/SideNav';
+import { useWebLayout } from './hooks/useWebLayout';
 import { FeedScreen } from './screens/cook/FeedScreen';
 import { GoLiveScreen } from './screens/cook/GoLiveScreen';
 import { MapScreen } from './screens/cook/MapScreen';
@@ -30,6 +32,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function App() {
   const { height, width } = useWindowDimensions();
+  const { isDesktop } = useWebLayout();
   const [activeTab, setActiveTab] = useState<TabId>('live');
   const [plates, setPlates] = useState<ClaimedPlate[]>([]);
 
@@ -100,12 +103,28 @@ export default function App() {
     <SafeAreaView
       className="flex-1"
       style={{ backgroundColor: cookTheme.bg }}
-      edges={['top', 'left', 'right']}
+      edges={isDesktop ? ['top'] : ['top', 'left', 'right']}
     >
       <StatusBar style="light" />
-      <View className="mx-auto w-full max-w-lg flex-1" style={webFill}>
-        <View className="flex-1">{content}</View>
-        <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+      <View
+        className="flex-1"
+        style={[
+          webFill,
+          isDesktop ? { flexDirection: 'row' as const } : undefined,
+        ]}
+      >
+        {isDesktop ? (
+          <SideNav activeTab={activeTab} onTabChange={setActiveTab} />
+        ) : null}
+        <View
+          className={isDesktop ? 'flex-1' : 'mx-auto w-full max-w-lg flex-1'}
+          style={isDesktop ? { minWidth: 0 } : undefined}
+        >
+          <View className="flex-1">{content}</View>
+          {!isDesktop ? (
+            <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+          ) : null}
+        </View>
       </View>
     </SafeAreaView>
   );

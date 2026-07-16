@@ -2,6 +2,10 @@ export type TabId = 'live' | 'map' | 'go-live' | 'orders' | 'profile';
 
 export type LiveStream = {
   id: string;
+  /** Bunny Stream video GUID — HLS is built from EXPO_PUBLIC_BUNNY_STREAM_CDN_HOSTNAME */
+  bunnyVideoId?: string | null;
+  hlsUrl?: string | null;
+  thumbnailUrl?: string | null;
   chefName: string;
   chefHandle: string;
   chefAvatar: string;
@@ -16,6 +20,8 @@ export type LiveStream = {
   minDonation: number;
   pickupAddress: string;
   pickupNeighborhood: string;
+  latitude: number;
+  longitude: number;
   distanceMiles: number;
   readyInMinutes: number;
   isLive: boolean;
