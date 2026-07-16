@@ -175,7 +175,7 @@ export function AppShell() {
     );
   }
 
-  if (configured && !user) {
+  if (!configured || !user) {
     return <LoginScreen />;
   }
 

@@ -84,7 +84,9 @@ export function LoginScreen() {
             className="mt-2 text-[14px] leading-5"
             style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
           >
-            Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to your .env file.
+            Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to your environment.
+            On Cloudflare Pages, set them under Settings → Environment variables, then redeploy
+            (Expo bakes them in at build time).
           </Text>
         </View>
       </View>
