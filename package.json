@@ -10,6 +10,9 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "export:web": "expo export -p web",
+    "build:web": "expo export -p web",
+    "deploy:cloudflare": "npm run build:web && wrangler deploy",
+    "preview:cloudflare": "npm run build:web && wrangler dev",
     "prebuild": "expo prebuild",
     "typecheck": "tsc --noEmit",
     "seed:demo": "node scripts/seed_demo_content.mjs",
@@ -52,7 +55,8 @@
     "@types/react": "~19.1.0",
     "eas-cli": "^19.0.8",
     "patch-package": "^8.0.0",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "wrangler": "^4.0.0"
   },
   "overrides": {
     "ajv": "^8.20.0",
