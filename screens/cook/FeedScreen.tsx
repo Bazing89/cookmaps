@@ -1,8 +1,9 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   Platform,
+  Pressable,
   Text,
   View,
   useWindowDimensions,
@@ -10,23 +11,49 @@ import {
   type NativeSyntheticEvent,
   type ViewToken,
 } from 'react-native';
+import { CommentsSheet } from '../../components/cook/CommentsSheet';
 import { DonateSheet } from '../../components/cook/DonateSheet';
 import { LiveFeedCard } from '../../components/cook/LiveFeedCard';
+import { useAuth } from '../../hooks/useAuth';
 import { useFeedVideos } from '../../hooks/useFeedVideos';
+import { useUserLocation } from '../../hooks/useUserLocation';
+import { useWebLayout } from '../../hooks/useWebLayout';
+import { applyCreatorProfileToStream, creatorKeyForStream } from '../../lib/creatorPosts';
+import { applyStreamDistances, sortStreamsByDistance } from '../../lib/geo';
 import { cookTheme } from '../../theme/cookTheme';
 import type { LiveStream } from '../../types/live';
 
 type Props = {
-  onDonated: (stream: LiveStream, amount: number) => void;
+  onDonated: (stream: LiveStream, amount: number, plateId?: string, plateLabel?: string) => void;
+  onOpenCreator: (creatorKey: string, postId?: string) => void;
 };
 
-export function FeedScreen({ onDonated }: Props) {
+export function FeedScreen({ onDonated, onOpenCreator }: Props) {
+  const { profile } = useAuth();
   const { height: windowHeight } = useWindowDimensions();
-  const { streams, loading, error } = useFeedVideos();
+  const { isDesktop } = useWebLayout();
+  const { streams, loading, error, refresh } = useFeedVideos();
+  const { location: userLocation, permissionDenied, openSettings } = useUserLocation();
+  const displayStreams = useMemo(() => {
+    const located = sortStreamsByDistance(applyStreamDistances(streams, userLocation));
+    if (!profile) return located;
+
+    return located.map((stream) =>
+      stream.creatorId === profile.id ? applyCreatorProfileToStream(stream, profile) : stream,
+    );
+  }, [streams, userLocation, profile]);
+
+  useEffect(() => {
+    if (!profile) return;
+    void refresh();
+  }, [profile?.avatar_url, profile?.display_name, profile?.handle, refresh]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [donateStream, setDonateStream] = useState<LiveStream | null>(null);
+  const [commentStream, setCommentStream] = useState<LiveStream | null>(null);
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   const [feedHeight, setFeedHeight] = useState(windowHeight);
+  const listRef = useRef<FlatList<LiveStream>>(null);
 
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     const first = viewableItems[0];
@@ -49,17 +76,50 @@ export function FeedScreen({ onDonated }: Props) {
     if (index !== activeIndex) setActiveIndex(index);
   };
 
+  const goToVideo = useCallback(
+    (index: number) => {
+      if (index < 0 || index >= displayStreams.length) return;
+      listRef.current?.scrollToIndex({ index, animated: true });
+      setActiveIndex(index);
+    },
+    [displayStreams.length],
+  );
+
+  const handleCommentCountChange = useCallback((postId: string, count: number) => {
+    setCommentCounts((prev) => {
+      if (prev[postId] === count) return prev;
+      return { ...prev, [postId]: count };
+    });
+  }, []);
+
   return (
     <View
       className="flex-1"
       style={{ backgroundColor: cookTheme.bg }}
       onLayout={(e) => setFeedHeight(e.nativeEvent.layout.height)}
     >
-      {loading && streams.length === 0 ? (
+      {permissionDenied && Platform.OS !== 'web' ? (
+        <Pressable
+          onPress={() => void openSettings()}
+          className="absolute left-4 right-4 top-3 z-20 rounded-xl border border-white/10 px-3 py-2.5"
+          style={{ backgroundColor: cookTheme.surface }}
+        >
+          <Text className="text-[12px] text-white" style={{ fontFamily: 'DMSans_500Medium' }}>
+            Enable location to sort chefs by distance and show your position on the map.
+          </Text>
+          <Text
+            className="mt-1 text-[11px]"
+            style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.accentSoft }}
+          >
+            Tap to open Settings
+          </Text>
+        </Pressable>
+      ) : null}
+      {loading && displayStreams.length === 0 ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color={cookTheme.accent} />
         </View>
-      ) : error && streams.length === 0 ? (
+      ) : error && displayStreams.length === 0 ? (
         <View className="flex-1 items-center justify-center px-8">
           <Text
             className="text-center text-[15px] text-white/80"
@@ -68,7 +128,7 @@ export function FeedScreen({ onDonated }: Props) {
             {error}
           </Text>
         </View>
-      ) : streams.length === 0 ? (
+      ) : displayStreams.length === 0 ? (
         <View className="flex-1 items-center justify-center px-8">
           <Text
             className="text-center text-[15px] text-white/80"
@@ -79,7 +139,8 @@ export function FeedScreen({ onDonated }: Props) {
         </View>
       ) : (
       <FlatList
-        data={streams}
+        ref={listRef}
+        data={displayStreams}
         keyExtractor={(item) => item.id}
         pagingEnabled
         showsVerticalScrollIndicator={false}
@@ -88,6 +149,12 @@ export function FeedScreen({ onDonated }: Props) {
         snapToAlignment="start"
         disableIntervalMomentum
         className={Platform.OS === 'web' ? 'web-feed-scroll' : undefined}
+        onScrollToIndexFailed={(info) => {
+          listRef.current?.scrollToOffset({
+            offset: info.averageItemLength * info.index,
+            animated: true,
+          });
+        }}
         getItemLayout={(_, index) => ({
           length: feedHeight,
           offset: feedHeight * index,
@@ -105,6 +172,15 @@ export function FeedScreen({ onDonated }: Props) {
               liked={likedIds.has(item.id)}
               onToggleLike={() => toggleLike(item.id)}
               onDonate={() => setDonateStream(item)}
+              onAsk={() => setCommentStream(item)}
+              commentCount={commentCounts[item.id] ?? item.commentCount ?? 0}
+              onSelectPlate={() => setDonateStream(item)}
+              onOpenCreator={(s) => onOpenCreator(creatorKeyForStream(s), s.id)}
+              onPrevVideo={isDesktop ? () => goToVideo(index - 1) : undefined}
+              onNextVideo={isDesktop ? () => goToVideo(index + 1) : undefined}
+              canGoPrev={isDesktop && index > 0}
+              canGoNext={isDesktop && index < displayStreams.length - 1}
+              hasUserLocation={userLocation != null}
             />
           </View>
         )}
@@ -115,10 +191,21 @@ export function FeedScreen({ onDonated }: Props) {
         visible={donateStream != null}
         stream={donateStream}
         onClose={() => setDonateStream(null)}
-        onConfirm={(amount) => {
-          if (donateStream) onDonated(donateStream, amount);
+        onConfirm={(amount, plateId) => {
+          if (!donateStream) return;
+          const plateLabel = plateId
+            ? donateStream.plates?.find((plate) => plate.id === plateId)?.label
+            : donateStream.plates?.find((plate) => plate.price === amount)?.label;
+          onDonated(donateStream, amount, plateId, plateLabel);
           setDonateStream(null);
         }}
+      />
+
+      <CommentsSheet
+        visible={commentStream != null}
+        stream={commentStream}
+        onClose={() => setCommentStream(null)}
+        onCommentCountChange={handleCommentCountChange}
       />
     </View>
   );

@@ -19,8 +19,13 @@ const config: ExpoConfig = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'com.cookmapz.app',
+    config: {
+      googleMapsApiKey,
+    },
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
+      NSLocationWhenInUseUsageDescription:
+        'CookMapz uses your location to show nearby chefs, pickup distances, and your position on the map.',
     },
   },
   android: {
@@ -44,14 +49,21 @@ const config: ExpoConfig = {
   },
   plugins: [
     'expo-dev-client',
+    'expo-sqlite',
+      [
+      'expo-image-picker',
+      {
+        photosPermission: 'Allow CookMapz to access your photos for profile pictures and cooking shorts.',
+      },
+    ],
     'expo-system-ui',
     'expo-font',
     'expo-video',
     [
-      'expo-maps',
+      'expo-location',
       {
-        requestLocationPermission: true,
-        locationPermission: 'Allow CookMapz to show your location on the pickup map.',
+        locationWhenInUsePermission:
+          'Allow CookMapz to show nearby chefs, pickup distances, and your position on the map.',
       },
     ],
   ],

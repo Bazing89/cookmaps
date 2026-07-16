@@ -1,30 +1,28 @@
-import { AdvancedMarker, APIProvider, Map } from '@vis.gl/react-google-maps';
-import { Image, StyleSheet, Text, View } from 'react-native';
-import type { ClaimedPlate } from '../../screens/cook/types';
+import { AdvancedMarker, APIProvider, Map as GoogleMap } from '@vis.gl/react-google-maps';
+import { StyleSheet, Text, View } from 'react-native';
+import { useMemo } from 'react';
 import { cookTheme } from '../../theme/cookTheme';
+import { ChefMapPin } from './ChefMapPin';
 import { getMapCamera } from './mapRegion';
-
-type Props = {
-  plates: ClaimedPlate[];
-};
+import type { PickupMapProps } from './types';
 
 const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
 
-function ChefPin({ plate }: { plate: ClaimedPlate }) {
+function UserLocationPin() {
   return (
-    <View style={styles.pin}>
-      <View style={styles.avatarRing}>
-        <Image source={{ uri: plate.stream.chefAvatar }} style={styles.avatar} />
-      </View>
-      <View style={styles.amountBadge}>
-        <Text style={styles.amountText}>${plate.amount}</Text>
-      </View>
+    <View style={styles.userPinOuter}>
+      <View style={styles.userPinInner} />
     </View>
   );
 }
 
-export function PickupMap({ plates }: Props) {
-  const { coordinates, zoom } = getMapCamera(plates);
+export function PickupMap({ chefs, plates, userLocation }: PickupMapProps) {
+  const { coordinates, zoom } = getMapCamera(chefs, plates, userLocation);
+
+  const plateByStreamId = useMemo(
+    () => new Map(plates.map((plate) => [plate.stream.id, plate])),
+    [plates],
+  );
 
   if (!apiKey) {
     return (
@@ -36,7 +34,7 @@ export function PickupMap({ plates }: Props) {
 
   return (
     <APIProvider apiKey={apiKey}>
-      <Map
+      <GoogleMap
         style={styles.map}
         defaultCenter={{ lat: coordinates.latitude, lng: coordinates.longitude }}
         defaultZoom={zoom}
@@ -44,19 +42,32 @@ export function PickupMap({ plates }: Props) {
         colorScheme="DARK"
         disableDefaultUI
         gestureHandling="greedy"
+        zoomControl={false}
+        fullscreenControl={false}
       >
-        {plates.map((plate) => (
+        {chefs.map((chef) => {
+          const plate = plateByStreamId.get(chef.id);
+          return (
+            <AdvancedMarker
+              key={chef.id}
+              position={{
+                lat: chef.latitude,
+                lng: chef.longitude,
+              }}
+            >
+              <ChefMapPin avatarUri={chef.chefAvatar} amount={plate?.amount} />
+            </AdvancedMarker>
+          );
+        })}
+        {userLocation ? (
           <AdvancedMarker
-            key={plate.id}
-            position={{
-              lat: plate.stream.latitude,
-              lng: plate.stream.longitude,
-            }}
+            position={{ lat: userLocation.latitude, lng: userLocation.longitude }}
+            title="You"
           >
-            <ChefPin plate={plate} />
+            <UserLocationPin />
           </AdvancedMarker>
-        ))}
-      </Map>
+        ) : null}
+      </GoogleMap>
     </APIProvider>
   );
 }
@@ -77,29 +88,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
   },
-  pin: {
+  userPinOuter: {
     alignItems: 'center',
-  },
-  avatarRing: {
-    borderColor: '#fff',
-    borderRadius: 22,
+    justifyContent: 'center',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(66, 133, 244, 0.25)',
     borderWidth: 2,
-    overflow: 'hidden',
+    borderColor: '#4285F4',
   },
-  avatar: {
-    height: 44,
-    width: 44,
-  },
-  amountBadge: {
-    backgroundColor: cookTheme.accent,
-    borderRadius: 999,
-    marginTop: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  amountText: {
-    color: '#fff',
-    fontFamily: 'DMSans_600SemiBold',
-    fontSize: 10,
+  userPinInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#4285F4',
   },
 });

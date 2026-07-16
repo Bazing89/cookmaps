@@ -18,8 +18,8 @@ const TABS: {
   { id: 'live', label: 'For You', icon: 'play-outline', activeIcon: 'play' },
   { id: 'map', label: 'Map', icon: 'map-outline', activeIcon: 'map' },
   { id: 'go-live', label: 'Cook', icon: 'radio-outline', activeIcon: 'radio' },
-  { id: 'orders', label: 'Plates', icon: 'bag-handle-outline', activeIcon: 'bag-handle' },
-  { id: 'profile', label: 'You', icon: 'person-outline', activeIcon: 'person' },
+  { id: 'orders', label: 'Orders', icon: 'bag-handle-outline', activeIcon: 'bag-handle' },
+  { id: 'profile', label: 'Profile', icon: 'person-outline', activeIcon: 'person' },
 ];
 
 export function BottomNav({ activeTab, onTabChange }: Props) {

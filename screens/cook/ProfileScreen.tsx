@@ -1,34 +1,524 @@
-import { Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Image,
+  Modal,
+  Pressable,
+  Text,
+  View,
+  useWindowDimensions,
+  type ViewToken,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LiveFeedCard } from '../../components/cook/LiveFeedCard';
+import { CommentsSheet } from '../../components/cook/CommentsSheet';
+import { CreatorAvatar } from '../../components/cook/CreatorAvatar';
+import { ProfileSettingsMenu } from '../../components/cook/ProfileSettingsMenu';
+import { formatCount } from '../../data/lives';
+import { useAuth } from '../../contexts/AuthContext';
+import { deleteCreatorPost, applyCreatorProfileToStream, displayHandle, fetchPostsByCreator } from '../../lib/creatorPosts';
+import { isProfileSetupIncomplete, updateUserProfile, uploadProfileAvatar } from '../../lib/profiles';
+import { resolveStreamThumbnail } from '../../lib/bunnyStream';
+import { EditProfileScreen } from './EditProfileScreen';
 import { cookTheme } from '../../theme/cookTheme';
+import type { LiveStream } from '../../types/live';
+
+function VideoOptionsMenu({
+  open,
+  onToggle,
+  onClose,
+  onDelete,
+  deleting,
+  align = 'right',
+  compact = false,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onDelete: () => void;
+  deleting: boolean;
+  align?: 'left' | 'right';
+  compact?: boolean;
+}) {
+  const buttonSize = compact ? 28 : 40;
+  const iconSize = compact ? 16 : 20;
+
+  return (
+    <View className="relative z-30">
+      <Pressable
+        onPress={onToggle}
+        disabled={deleting}
+        className="items-center justify-center rounded-full"
+        style={{
+          width: buttonSize,
+          height: buttonSize,
+          backgroundColor: 'rgba(0,0,0,0.55)',
+        }}
+        accessibilityLabel="Video options"
+      >
+        {deleting ? (
+          <ActivityIndicator color="#fff" size="small" />
+        ) : (
+          <Ionicons name="ellipsis-vertical" size={iconSize} color="#fff" />
+        )}
+      </Pressable>
+
+      {open ? (
+        <View
+          className="absolute z-50 min-w-[140px] overflow-hidden rounded-xl border border-white/10"
+          style={{
+            backgroundColor: cookTheme.surface,
+            top: buttonSize + 4,
+            ...(align === 'right' ? { right: 0 } : { left: 0 }),
+          }}
+        >
+          <Pressable
+            onPress={() => {
+              onClose();
+              onDelete();
+            }}
+            className="flex-row items-center px-4 py-3"
+          >
+            <Ionicons name="trash-outline" size={18} color={cookTheme.live} />
+            <Text
+              className="ml-2.5 text-[14px]"
+              style={{ fontFamily: 'DMSans_600SemiBold', color: cookTheme.live }}
+            >
+              Delete
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
+  );
+}
 
 export function ProfileScreen() {
+  const { user, profile, refreshProfile } = useAuth();
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const bottomNavInset = 58 + Math.max(insets.bottom, 10);
+  const cellSize = Math.floor((width - 40 - 4) / 3);
+  const [streams, setStreams] = useState<LiveStream[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [viewerMenuOpen, setViewerMenuOpen] = useState(false);
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [commentStream, setCommentStream] = useState<LiveStream | null>(null);
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
+  const listRef = useRef<FlatList<LiveStream>>(null);
+
+  const loadVideos = useCallback(async () => {
+    if (!user?.id) {
+      setStreams([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const posts = await fetchPostsByCreator(user.id);
+      setStreams(posts);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    void loadVideos();
+  }, [loadVideos]);
+
+  const totalLikes = useMemo(
+    () => streams.reduce((sum, s) => sum + s.likeCount, 0),
+    [streams],
+  );
+
+  const displayStreams = useMemo(() => {
+    if (!profile) return streams;
+    return streams.map((stream) => applyCreatorProfileToStream(stream, profile));
+  }, [profile, streams]);
+
+  const openVideo = useCallback((index: number) => {
+    setViewerMenuOpen(false);
+    setViewerIndex(index);
+    setViewerOpen(true);
+  }, []);
+
+  const confirmDelete = useCallback(
+    (stream: LiveStream) => {
+      Alert.alert(
+        'Delete video?',
+        `Remove "${stream.dishName}" from your profile? This cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => {
+              void (async () => {
+                if (!user) return;
+                setDeletingId(stream.id);
+                try {
+                  await deleteCreatorPost(stream.id, user.id, {
+                    bunnyVideoId: stream.bunnyVideoId,
+                    videoUrl: stream.videoUrl,
+                  });
+                  setStreams((prev) => prev.filter((s) => s.id !== stream.id));
+                  setViewerOpen(false);
+                } catch (e) {
+                  Alert.alert(
+                    'Could not delete',
+                    e instanceof Error ? e.message : 'Delete failed. Try again.',
+                  );
+                } finally {
+                  setDeletingId(null);
+                }
+              })();
+            },
+          },
+        ],
+      );
+    },
+    [user],
+  );
+
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    const first = viewableItems[0];
+    if (first?.index != null) {
+      setViewerIndex(first.index);
+      setViewerMenuOpen(false);
+    }
+  }).current;
+
+  const name = profile?.display_name ?? user?.email?.split('@')[0] ?? 'Neighbor';
+  const handle = profile ? displayHandle(profile) : '@neighbor';
+  const setupIncomplete = isProfileSetupIncomplete(profile);
+
+  const pickProfilePhoto = useCallback(async () => {
+    if (!user) return;
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission needed', 'Allow photo access to set a profile picture.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.85,
+    });
+
+    if (result.canceled || !result.assets[0]) return;
+
+    setAvatarBusy(true);
+    try {
+      const asset = result.assets[0];
+      const publicUrl = await uploadProfileAvatar(user.id, asset.uri, asset.mimeType ?? 'image/jpeg');
+      await updateUserProfile(user.id, { avatar_url: publicUrl });
+      await refreshProfile();
+    } catch (e) {
+      Alert.alert(
+        'Could not update photo',
+        e instanceof Error ? e.message : 'Try again from Settings → Edit profile.',
+      );
+    } finally {
+      setAvatarBusy(false);
+    }
+  }, [refreshProfile, user]);
+
+  const handleCommentCountChange = useCallback((postId: string, count: number) => {
+    setCommentCounts((prev) => {
+      if (prev[postId] === count) return prev;
+      return { ...prev, [postId]: count };
+    });
+  }, []);
+
   return (
-    <View className="flex-1 px-5 pt-4" style={{ backgroundColor: cookTheme.bg }}>
-      <Text className="text-[28px] text-white" style={{ fontFamily: 'Syne_800ExtraBold' }}>
-        You
-      </Text>
-      <View
-        className="mt-6 items-center rounded-3xl border border-white/10 px-5 py-8"
-        style={{ backgroundColor: cookTheme.surface }}
-      >
-        <View
-          className="h-20 w-20 items-center justify-center rounded-full"
-          style={{ backgroundColor: cookTheme.accent }}
-        >
-          <Text className="text-[28px] text-white" style={{ fontFamily: 'Syne_800ExtraBold' }}>
-            C
-          </Text>
-        </View>
-        <Text className="mt-4 text-[20px] text-white" style={{ fontFamily: 'Syne_700Bold' }}>
-          Hungry neighbor
+    <View className="relative flex-1" style={{ backgroundColor: cookTheme.bg }}>
+      <View className="flex-row items-center justify-between px-5 pt-4 pb-1">
+        <Text className="text-[28px] text-white" style={{ fontFamily: 'Syne_800ExtraBold' }}>
+          Profile
         </Text>
-        <Text
-          className="mt-1 text-[13px]"
-          style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
+        <Pressable
+          onPress={() => setMenuOpen(true)}
+          hitSlop={12}
+          className="h-10 w-10 items-center justify-center rounded-full"
+          style={{ backgroundColor: cookTheme.surfaceElevated }}
+          accessibilityLabel="Settings menu"
         >
-          Watch live · donate · pick up
-        </Text>
+          <Ionicons name="menu" size={22} color="#fff" />
+        </Pressable>
       </View>
+
+      {loading ? (
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator color={cookTheme.accent} size="large" />
+        </View>
+      ) : (
+        <FlatList
+          data={displayStreams}
+          keyExtractor={(item) => item.id}
+          numColumns={3}
+          columnWrapperStyle={{ gap: 2, marginBottom: 2 }}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomNavInset + 16 }}
+          ListHeaderComponent={
+            <View className="mb-5 items-center pt-2">
+              {setupIncomplete ? (
+                <Pressable
+                  onPress={() => setEditProfileOpen(true)}
+                  className="mb-4 w-full rounded-2xl border border-white/10 px-4 py-3"
+                  style={{ backgroundColor: cookTheme.surfaceElevated }}
+                >
+                  <View className="flex-row items-center justify-between">
+                    <View className="flex-1 pr-3">
+                      <Text
+                        className="text-[14px] text-white"
+                        style={{ fontFamily: 'DMSans_600SemiBold' }}
+                      >
+                        Finish setting up your account
+                      </Text>
+                      <Text
+                        className="mt-1 text-[12px] leading-5"
+                        style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
+                      >
+                        Add a profile photo and display name so neighbors recognize you.
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={cookTheme.textMuted} />
+                  </View>
+                </Pressable>
+              ) : null}
+
+              <Pressable onPress={() => void pickProfilePhoto()} disabled={avatarBusy} className="relative">
+                <CreatorAvatar
+                  uri={profile?.avatar_url}
+                  name={profile?.display_name ?? user?.email?.split('@')[0]}
+                  email={profile?.email ?? user?.email}
+                  size={96}
+                  style={{ opacity: avatarBusy ? 0.6 : 1 }}
+                />
+                <View
+                  className="absolute bottom-0 right-0 h-8 w-8 items-center justify-center rounded-full border-2"
+                  style={{ backgroundColor: cookTheme.surface, borderColor: cookTheme.bg }}
+                >
+                  {avatarBusy ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Ionicons name="camera" size={16} color="#fff" />
+                  )}
+                </View>
+              </Pressable>
+              <Pressable onPress={() => setEditProfileOpen(true)} className="mt-3">
+                <Text className="text-[13px] text-white" style={{ fontFamily: 'DMSans_500Medium' }}>
+                  Edit profile
+                </Text>
+              </Pressable>
+              <Text className="mt-3 text-[22px] text-white" style={{ fontFamily: 'Syne_800ExtraBold' }}>
+                {name}
+              </Text>
+              <Text
+                className="mt-0.5 text-[14px]"
+                style={{ fontFamily: 'DMSans_500Medium', color: cookTheme.textMuted }}
+              >
+                {handle}
+              </Text>
+              {profile?.bio ? (
+                <Text
+                  className="mt-3 text-center text-[13px] leading-5"
+                  style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
+                >
+                  {profile.bio}
+                </Text>
+              ) : null}
+
+              <View className="mt-5 flex-row gap-8">
+                <Stat label="Videos" value={String(streams.length)} />
+                <Stat label="Followers" value={formatCount(profile?.follower_count ?? 0)} />
+                <Stat label="Likes" value={formatCount(totalLikes)} />
+              </View>
+
+              <View className="mt-6 w-full flex-row border-b border-white/10 pb-2">
+                <View className="flex-1 items-center border-b-2" style={{ borderColor: cookTheme.accent }}>
+                  <Ionicons name="grid-outline" size={20} color="#fff" />
+                </View>
+              </View>
+            </View>
+          }
+          ListEmptyComponent={
+            <View className="mt-6 items-center px-6">
+              <Ionicons name="videocam-outline" size={40} color={cookTheme.textMuted} />
+              <Text
+                className="mt-3 text-center text-[15px] text-white"
+                style={{ fontFamily: 'DMSans_500Medium' }}
+              >
+                No videos yet
+              </Text>
+              <Text
+                className="mt-1 text-center text-[13px] leading-5"
+                style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
+              >
+                Post a short or go live from the Cook tab to fill your profile.
+              </Text>
+            </View>
+          }
+          renderItem={({ item, index }) => {
+            const thumb = resolveStreamThumbnail(item.coverImage, item.bunnyVideoId, item.thumbnailUrl);
+            const isDeleting = deletingId === item.id;
+            return (
+              <Pressable
+                onPress={() => openVideo(index)}
+                disabled={isDeleting}
+                style={{ width: cellSize, height: cellSize * 1.35, opacity: isDeleting ? 0.5 : 1 }}
+              >
+                <Image source={{ uri: thumb }} className="h-full w-full" resizeMode="cover" />
+                {item.isLive ? (
+                  <View
+                    className="absolute left-1 top-1 rounded px-1.5 py-0.5"
+                    style={{ backgroundColor: cookTheme.live }}
+                  >
+                    <Text
+                      className="text-[9px] font-bold text-white"
+                      style={{ fontFamily: 'DMSans_600SemiBold' }}
+                    >
+                      LIVE
+                    </Text>
+                  </View>
+                ) : null}
+                {item.postType === 'short' ? (
+                  <View className="absolute right-1 top-1">
+                    <Ionicons name="film-outline" size={14} color="#fff" />
+                  </View>
+                ) : null}
+                <View className="absolute bottom-1 left-1 flex-row items-center">
+                  <Ionicons name="play" size={12} color="#fff" />
+                  <Text
+                    className="ml-0.5 text-[11px] text-white"
+                    style={{ fontFamily: 'DMSans_600SemiBold' }}
+                  >
+                    {formatCount(item.viewerCount || item.likeCount)}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          }}
+        />
+      )}
+
+      <Modal
+        visible={viewerOpen}
+        animationType="slide"
+        onRequestClose={() => {
+          setViewerMenuOpen(false);
+          setViewerOpen(false);
+        }}
+      >
+        <View className="flex-1" style={{ backgroundColor: cookTheme.bg }}>
+          {viewerMenuOpen ? (
+            <Pressable
+              className="absolute inset-0 z-10"
+              onPress={() => setViewerMenuOpen(false)}
+            />
+          ) : null}
+          <View className="absolute left-4 right-4 top-12 z-20 flex-row items-center justify-between">
+            <Pressable
+              onPress={() => {
+                setViewerMenuOpen(false);
+                setViewerOpen(false);
+              }}
+              className="h-10 w-10 items-center justify-center rounded-full"
+              style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+            >
+              <Ionicons name="close" size={24} color="#fff" />
+            </Pressable>
+            {displayStreams[viewerIndex] ? (
+              <VideoOptionsMenu
+                open={viewerMenuOpen}
+                onToggle={() => setViewerMenuOpen((value) => !value)}
+                onClose={() => setViewerMenuOpen(false)}
+                onDelete={() => confirmDelete(displayStreams[viewerIndex])}
+                deleting={deletingId === displayStreams[viewerIndex]?.id}
+              />
+            ) : null}
+          </View>
+          <FlatList
+            ref={listRef}
+            data={displayStreams}
+            keyExtractor={(item) => item.id}
+            pagingEnabled
+            initialScrollIndex={viewerIndex}
+            getItemLayout={(_, index) => ({ length: height, offset: height * index, index })}
+            onScrollToIndexFailed={(info) => {
+              listRef.current?.scrollToOffset({
+                offset: info.averageItemLength * info.index,
+                animated: false,
+              });
+            }}
+            onViewableItemsChanged={onViewableItemsChanged}
+            viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item, index }) => (
+              <LiveFeedCard
+                stream={item}
+                height={height}
+                isActive={index === viewerIndex}
+                liked={likedIds.has(item.id)}
+                onToggleLike={() =>
+                  setLikedIds((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(item.id)) next.delete(item.id);
+                    else next.add(item.id);
+                    return next;
+                  })
+                }
+                onDonate={() => {}}
+                onAsk={() => setCommentStream(item)}
+                commentCount={commentCounts[item.id] ?? 0}
+              />
+            )}
+          />
+        </View>
+      </Modal>
+
+      <ProfileSettingsMenu visible={menuOpen} onClose={() => setMenuOpen(false)} />
+
+      <CommentsSheet
+        visible={commentStream != null}
+        stream={commentStream}
+        onClose={() => setCommentStream(null)}
+        onCommentCountChange={handleCommentCountChange}
+      />
+
+      {editProfileOpen ? (
+        <View className="absolute inset-0 z-50">
+          <EditProfileScreen onBack={() => setEditProfileOpen(false)} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <View className="items-center">
+      <Text className="text-[18px] text-white" style={{ fontFamily: 'Syne_700Bold' }}>
+        {value}
+      </Text>
+      <Text
+        className="mt-0.5 text-[12px]"
+        style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
+      >
+        {label}
+      </Text>
     </View>
   );
 }

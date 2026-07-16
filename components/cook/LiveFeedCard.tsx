@@ -4,10 +4,13 @@ import { useEffect, useRef } from 'react';
 import { Animated, Image, Pressable, Text, View } from 'react-native';
 import { formatCount } from '../../data/lives';
 import { useWebLayout } from '../../hooks/useWebLayout';
+import { formatDistanceLabel } from '../../lib/geo';
 import { resolveStreamThumbnail } from '../../lib/bunnyStream';
 import { cookTheme } from '../../theme/cookTheme';
 import type { LiveStream } from '../../types/live';
-import { FeedVideoPlayer } from './FeedVideoPlayer';
+import { FeedVideoPlayer, type FeedVideoPlayerRef } from './FeedVideoPlayer';
+import { CreatorAvatar } from './CreatorAvatar';
+import { PlatesBar } from './PlatesBar';
 
 type Props = {
   stream: LiveStream;
@@ -16,6 +19,15 @@ type Props = {
   liked: boolean;
   onToggleLike: () => void;
   onDonate: () => void;
+  onAsk?: () => void;
+  commentCount?: number;
+  onOpenCreator?: (stream: LiveStream) => void;
+  onSelectPlate?: () => void;
+  onPrevVideo?: () => void;
+  onNextVideo?: () => void;
+  canGoPrev?: boolean;
+  canGoNext?: boolean;
+  hasUserLocation?: boolean;
 };
 
 function ActionButton({
@@ -71,17 +83,23 @@ function CaptionBlock({
   stream,
   pulse,
   onDonate,
+  onOpenCreator,
   overlay = true,
+  hasUserLocation = false,
+  bottomInset = 0,
 }: {
   stream: LiveStream;
   pulse: Animated.Value;
   onDonate: () => void;
+  onOpenCreator?: (stream: LiveStream) => void;
   overlay?: boolean;
+  hasUserLocation?: boolean;
+  bottomInset?: number;
 }) {
   const caption = [stream.dishName, stream.dishDescription].filter(Boolean).join(' · ');
 
   return (
-    <View className={overlay ? 'absolute bottom-3 left-0 right-16 z-10 px-3' : 'absolute bottom-3 left-0 right-0 z-10 px-3'}>
+    <View className={overlay ? 'absolute left-0 right-16 z-10 px-3' : 'absolute bottom-3 left-0 right-0 z-10 px-3'} style={overlay ? { bottom: 12 + bottomInset } : undefined} pointerEvents="box-none">
       <View className="mb-1.5 flex-row items-center gap-2">
         {stream.isLive ? (
           <View
@@ -103,21 +121,23 @@ function CaptionBlock({
             </Text>
           </View>
         ) : null}
-        <Text
-          className="text-[14px] text-white"
-          style={{
-            fontFamily: 'DMSans_600SemiBold',
-            ...(overlay
-              ? {
-                  textShadowColor: 'rgba(0,0,0,0.8)',
-                  textShadowOffset: { width: 0, height: 1 },
-                  textShadowRadius: 4,
-                }
-              : {}),
-          }}
-        >
-          {stream.chefHandle}
-        </Text>
+        <Pressable onPress={() => onOpenCreator?.(stream)}>
+          <Text
+            className="text-[14px] text-white"
+            style={{
+              fontFamily: 'DMSans_600SemiBold',
+              ...(overlay
+                ? {
+                    textShadowColor: 'rgba(0,0,0,0.8)',
+                    textShadowOffset: { width: 0, height: 1 },
+                    textShadowRadius: 4,
+                  }
+                : {}),
+            }}
+          >
+            {stream.chefHandle}
+          </Text>
+        </Pressable>
       </View>
 
       <Text
@@ -153,7 +173,7 @@ function CaptionBlock({
           }}
           numberOfLines={1}
         >
-          {stream.pickupNeighborhood} · {stream.distanceMiles} mi · claim ${stream.minDonation}+
+          {stream.pickupNeighborhood} · {formatDistanceLabel(stream.distanceMiles, hasUserLocation)} · claim ${stream.minDonation}+
         </Text>
       </Pressable>
     </View>
@@ -165,20 +185,24 @@ function ActionRail({
   liked,
   onToggleLike,
   onDonate,
+  onAsk,
+  commentCount = 0,
+  onOpenCreator,
   webDesktop = false,
 }: {
   stream: LiveStream;
   liked: boolean;
   onToggleLike: () => void;
   onDonate: () => void;
+  onAsk?: () => void;
+  commentCount?: number;
+  onOpenCreator?: (stream: LiveStream) => void;
   webDesktop?: boolean;
 }) {
   return (
-    <View className={webDesktop ? 'ml-5 items-center pt-2' : 'absolute bottom-28 right-2 z-10 items-center'}>
-      <Pressable onPress={onDonate} className="mb-4 items-center" hitSlop={8}>
-        <View className="overflow-hidden rounded-full border-2 border-white">
-          <Image source={{ uri: stream.chefAvatar }} className="h-12 w-12" />
-        </View>
+    <View className={webDesktop ? 'ml-5 items-center pt-2' : 'absolute bottom-28 right-2 z-10 items-center'} pointerEvents="box-none">
+      <Pressable onPress={() => onOpenCreator?.(stream)} className="mb-4 items-center" hitSlop={8}>
+        <CreatorAvatar uri={stream.chefAvatar} name={stream.chefName} size={48} border />
         <View
           className="-mt-2.5 h-5 w-5 items-center justify-center rounded-full"
           style={{ backgroundColor: cookTheme.accent }}
@@ -194,9 +218,14 @@ function ActionRail({
         tint={liked ? cookTheme.live : '#fff'}
         webDesktop={webDesktop}
       />
-      <ActionButton icon="chatbubble-ellipses-outline" label="Ask" onPress={onDonate} webDesktop={webDesktop} />
       <ActionButton
-        icon="gift-outline"
+        icon="chatbubble-ellipses-outline"
+        label={commentCount > 0 ? formatCount(commentCount) : 'Ask'}
+        onPress={onAsk ?? onDonate}
+        webDesktop={webDesktop}
+      />
+      <ActionButton
+        icon="restaurant-outline"
         label={`$${stream.minDonation}`}
         onPress={onDonate}
         tint="#fff"
@@ -207,6 +236,30 @@ function ActionRail({
   );
 }
 
+function WebVideoNavButton({
+  icon,
+  onPress,
+  disabled,
+}: {
+  icon: 'chevron-up' | 'chevron-down';
+  onPress?: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      className="h-10 w-10 items-center justify-center rounded-full"
+      style={{
+        backgroundColor: disabled ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.1)',
+        opacity: disabled ? 0.35 : 1,
+      }}
+    >
+      <Ionicons name={icon} size={22} color="#fff" />
+    </Pressable>
+  );
+}
+
 export function LiveFeedCard({
   stream,
   height,
@@ -214,9 +267,19 @@ export function LiveFeedCard({
   liked,
   onToggleLike,
   onDonate,
+  onAsk,
+  commentCount,
+  onOpenCreator,
+  onSelectPlate,
+  onPrevVideo,
+  onNextVideo,
+  canGoPrev = false,
+  canGoNext = false,
+  hasUserLocation = false,
 }: Props) {
   const { isDesktop, videoHeight, videoWidth } = useWebLayout();
   const pulse = useRef(new Animated.Value(1)).current;
+  const videoPlayerRef = useRef<FeedVideoPlayerRef>(null);
 
   useEffect(() => {
     if (!isActive) {
@@ -238,6 +301,8 @@ export function LiveFeedCard({
     stream.bunnyVideoId,
     stream.thumbnailUrl,
   );
+  const hasPlates = Boolean(isActive && stream.plates?.length);
+  const platesBottomInset = hasPlates ? 76 : 0;
 
   if (isDesktop) {
     return (
@@ -245,7 +310,9 @@ export function LiveFeedCard({
         style={{ height, backgroundColor: cookTheme.bg }}
         className="w-full items-center justify-center"
       >
-        <View className="flex-row items-end">
+        <WebVideoNavButton icon="chevron-up" onPress={onPrevVideo} disabled={!canGoPrev} />
+
+        <View className="my-3 flex-row items-end">
           <View
             style={{
               width: videoWidth,
@@ -255,14 +322,33 @@ export function LiveFeedCard({
               backgroundColor: '#000',
             }}
           >
-            <FeedVideoPlayer stream={stream} isActive={isActive} posterUri={posterUri} />
+            <FeedVideoPlayer ref={videoPlayerRef} stream={stream} isActive={isActive} posterUri={posterUri} />
+            <Pressable
+              style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 1 }}
+              onPress={() => videoPlayerRef.current?.togglePlayback()}
+            />
             <LinearGradient
               colors={['transparent', 'transparent', 'rgba(0,0,0,0.55)']}
               locations={[0, 0.72, 1]}
               pointerEvents="none"
               style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
             />
-            <CaptionBlock stream={stream} pulse={pulse} onDonate={onDonate} overlay={false} />
+            <CaptionBlock
+              stream={stream}
+              pulse={pulse}
+              onDonate={onDonate}
+              onOpenCreator={onOpenCreator}
+              overlay={false}
+              hasUserLocation={hasUserLocation}
+              bottomInset={platesBottomInset}
+            />
+            {hasPlates && stream.plates ? (
+              <PlatesBar
+                plates={stream.plates}
+                chefName={stream.chefName}
+                onSelectPlate={() => onSelectPlate?.() ?? onDonate()}
+              />
+            ) : null}
           </View>
 
           <ActionRail
@@ -270,16 +356,26 @@ export function LiveFeedCard({
             liked={liked}
             onToggleLike={onToggleLike}
             onDonate={onDonate}
+            onAsk={onAsk}
+            commentCount={commentCount}
+            onOpenCreator={onOpenCreator}
             webDesktop
           />
         </View>
+
+        <WebVideoNavButton icon="chevron-down" onPress={onNextVideo} disabled={!canGoNext} />
       </View>
     );
   }
 
   return (
     <View style={{ height, backgroundColor: cookTheme.bg }} className="w-full overflow-hidden">
-      <FeedVideoPlayer stream={stream} isActive={isActive} posterUri={posterUri} />
+      <FeedVideoPlayer ref={videoPlayerRef} stream={stream} isActive={isActive} posterUri={posterUri} />
+
+      <Pressable
+        style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 1 }}
+        onPress={() => videoPlayerRef.current?.togglePlayback()}
+      />
 
       <LinearGradient
         colors={['transparent', 'transparent', 'rgba(0,0,0,0.55)']}
@@ -293,9 +389,27 @@ export function LiveFeedCard({
         liked={liked}
         onToggleLike={onToggleLike}
         onDonate={onDonate}
+        onAsk={onAsk}
+        commentCount={commentCount}
+        onOpenCreator={onOpenCreator}
       />
 
-      <CaptionBlock stream={stream} pulse={pulse} onDonate={onDonate} />
+      <CaptionBlock
+        stream={stream}
+        pulse={pulse}
+        onDonate={onDonate}
+        onOpenCreator={onOpenCreator}
+        hasUserLocation={hasUserLocation}
+        bottomInset={platesBottomInset}
+      />
+
+      {hasPlates && stream.plates ? (
+        <PlatesBar
+          plates={stream.plates}
+          chefName={stream.chefName}
+          onSelectPlate={() => onSelectPlate?.() ?? onDonate()}
+        />
+      ) : null}
     </View>
   );
 }

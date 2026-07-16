@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 import { cookTheme } from '../../theme/cookTheme';
 import type { TabId } from '../../types/live';
 
@@ -17,7 +17,7 @@ const NAV_ITEMS: {
   { id: 'live', label: 'For You', icon: 'home-outline', activeIcon: 'home' },
   { id: 'map', label: 'Map', icon: 'map-outline', activeIcon: 'map' },
   { id: 'go-live', label: 'Cook', icon: 'add-circle-outline', activeIcon: 'add-circle' },
-  { id: 'orders', label: 'Plates', icon: 'bag-handle-outline', activeIcon: 'bag-handle' },
+  { id: 'orders', label: 'Orders', icon: 'bag-handle-outline', activeIcon: 'bag-handle' },
   { id: 'profile', label: 'Profile', icon: 'person-outline', activeIcon: 'person' },
 ];
 
@@ -25,14 +25,24 @@ export function SideNav({ activeTab, onTabChange }: Props) {
   return (
     <View
       className="h-full border-r border-white/10 px-3 py-6"
-      style={{ width: 240, backgroundColor: cookTheme.bg }}
+      style={{ width: 256, backgroundColor: cookTheme.bg }}
     >
-      <Text
-        className="mb-8 px-3 text-[28px] text-white"
-        style={{ fontFamily: 'Syne_800ExtraBold', letterSpacing: -0.5 }}
-      >
-        CookMapz
-      </Text>
+      <View className="mb-8 px-2" style={{ overflow: 'visible' }}>
+        <Text
+          className="text-white"
+          style={{
+            fontFamily: 'Syne_800ExtraBold',
+            fontSize: 24,
+            letterSpacing: -0.3,
+            flexShrink: 0,
+            ...(Platform.OS === 'web'
+              ? ({ whiteSpace: 'nowrap', overflow: 'visible' } as const)
+              : {}),
+          }}
+        >
+          CookMapz
+        </Text>
+      </View>
 
       <View className="gap-1">
         {NAV_ITEMS.map((item) => {

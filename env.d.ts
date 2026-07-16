@@ -8,5 +8,7 @@ declare namespace NodeJS {
     EXPO_PUBLIC_BUNNY_STREAM_CDN_HOSTNAME?: string;
     /** Referer sent with CDN video/thumbnail requests when direct URL access is blocked. */
     EXPO_PUBLIC_BUNNY_STREAM_EMBED_REFERER?: string;
+    EXPO_PUBLIC_SUPABASE_URL?: string;
+    EXPO_PUBLIC_SUPABASE_ANON_KEY?: string;
   }
 }

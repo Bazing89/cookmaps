@@ -1,35 +1,34 @@
-import Constants, { ExecutionEnvironment } from 'expo-constants';
-import type { ComponentType } from 'react';
-import type { ClaimedPlate } from '../../screens/cook/types';
+import { Text, View } from 'react-native';
+import { cookTheme } from '../../theme/cookTheme';
+import { GooglePickupMap } from './GooglePickupMap';
 import { PickupMapNativeFallback } from './PickupMapNativeFallback';
+import type { PickupMapProps } from './types';
 
-type Props = {
-  plates: ClaimedPlate[];
-};
+const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
 
-type ExpoMapsModule = {
-  ExpoMapsPickupMap: ComponentType<Props>;
-};
-
-const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
-
-function loadExpoMaps(): ExpoMapsModule | null {
-  if (isExpoGo) return null;
-
-  try {
-    return require('./ExpoMapsPickupMap') as ExpoMapsModule;
-  } catch {
-    return null;
+export function PickupMap(props: PickupMapProps) {
+  if (!apiKey) {
+    return (
+      <View style={{ flex: 1, backgroundColor: cookTheme.bg }}>
+        <PickupMapNativeFallback {...props} />
+        <View
+          style={{
+            position: 'absolute',
+            bottom: 24,
+            left: 16,
+            right: 16,
+            borderRadius: 12,
+            backgroundColor: cookTheme.surface,
+            padding: 12,
+          }}
+        >
+          <Text style={{ color: cookTheme.textMuted, fontFamily: 'DMSans_400Regular', fontSize: 12 }}>
+            Add EXPO_PUBLIC_GOOGLE_MAPS_API_KEY for Google Maps on mobile.
+          </Text>
+        </View>
+      </View>
+    );
   }
-}
 
-const expoMapsModule = loadExpoMaps();
-
-export function PickupMap({ plates }: Props) {
-  if (!expoMapsModule) {
-    return <PickupMapNativeFallback plates={plates} />;
-  }
-
-  const { ExpoMapsPickupMap } = expoMapsModule;
-  return <ExpoMapsPickupMap plates={plates} />;
+  return <GooglePickupMap {...props} />;
 }

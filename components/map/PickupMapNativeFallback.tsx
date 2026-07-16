@@ -1,12 +1,8 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Image, StyleSheet, Text, View } from 'react-native';
-import type { ClaimedPlate } from '../../screens/cook/types';
+import { StyleSheet, Text, View } from 'react-native';
 import { cookTheme } from '../../theme/cookTheme';
+import { ChefMapPin } from './ChefMapPin';
 import { getMapCamera } from './mapRegion';
-
-type Props = {
-  plates: ClaimedPlate[];
-};
+import type { PickupMapProps } from './types';
 
 function pinPosition(
   latitude: number,
@@ -23,8 +19,9 @@ function pinPosition(
   };
 }
 
-export function PickupMapNativeFallback({ plates }: Props) {
-  const center = getMapCamera(plates).coordinates;
+export function PickupMapNativeFallback({ chefs, plates, userLocation }: PickupMapProps) {
+  const center = getMapCamera(chefs, plates, userLocation).coordinates;
+  const plateByStreamId = new Map(plates.map((plate) => [plate.stream.id, plate]));
 
   return (
     <View style={styles.root}>
@@ -37,25 +34,25 @@ export function PickupMapNativeFallback({ plates }: Props) {
         ))}
       </View>
 
-      {plates.map((plate) => {
-        const pos = pinPosition(plate.stream.latitude, plate.stream.longitude, center);
+      {chefs.map((chef) => {
+        const plate = plateByStreamId.get(chef.id);
+        const pos = pinPosition(chef.latitude, chef.longitude, center);
         return (
-          <View key={plate.id} style={[styles.pin, pos]}>
-            <View style={styles.avatarRing}>
-              <Image source={{ uri: plate.stream.chefAvatar }} style={styles.avatar} />
-            </View>
-            <View style={styles.amountBadge}>
-              <Text style={styles.amountText}>${plate.amount}</Text>
-            </View>
+          <View key={chef.id} style={[styles.pin, pos]}>
+            <ChefMapPin avatarUri={chef.chefAvatar} amount={plate?.amount} />
           </View>
         );
       })}
 
+      {userLocation ? (
+        <View style={[styles.userPin, pinPosition(userLocation.latitude, userLocation.longitude, center)]}>
+          <View style={styles.userDot} />
+        </View>
+      ) : null}
+
       <View style={styles.banner}>
-        <Ionicons name="information-circle-outline" size={16} color={cookTheme.accentSoft} />
         <Text style={styles.bannerText}>
-          Native maps need a dev build. Use `npx expo run:ios` or an EAS build — Expo Go does not
-          include expo-maps.
+          Google Maps requires a dev build. Run `npx expo run:ios` or `npx expo run:android`.
         </Text>
       </View>
     </View>
@@ -88,36 +85,24 @@ const styles = StyleSheet.create({
     position: 'absolute',
     alignItems: 'center',
   },
-  avatarRing: {
-    borderColor: '#fff',
-    borderRadius: 22,
+  userPin: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  userDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#4285F4',
     borderWidth: 2,
-    overflow: 'hidden',
-  },
-  avatar: {
-    height: 44,
-    width: 44,
-  },
-  amountBadge: {
-    backgroundColor: cookTheme.accent,
-    borderRadius: 999,
-    marginTop: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  amountText: {
-    color: '#fff',
-    fontFamily: 'DMSans_600SemiBold',
-    fontSize: 10,
+    borderColor: '#fff',
   },
   banner: {
     position: 'absolute',
     bottom: 16,
     left: 16,
     right: 16,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
@@ -126,10 +111,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   bannerText: {
-    flex: 1,
     color: cookTheme.textMuted,
     fontFamily: 'DMSans_400Regular',
     fontSize: 12,
     lineHeight: 17,
+    textAlign: 'center',
   },
 });
