@@ -164,6 +164,60 @@ export type Database = {
         };
         Relationships: [];
       };
+      creator_plates: {
+        Row: {
+          id: string;
+          creator_id: string;
+          name: string;
+          ingredients: string;
+          description: string;
+          price: number;
+          image_url: string | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          creator_id: string;
+          name: string;
+          ingredients?: string;
+          description?: string;
+          price: number;
+          image_url?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          name?: string;
+          ingredients?: string;
+          description?: string;
+          price?: number;
+          image_url?: string | null;
+          is_active?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      post_plate_links: {
+        Row: {
+          id: string;
+          post_id: string;
+          creator_plate_id: string;
+          sort_order: number;
+        };
+        Insert: {
+          id?: string;
+          post_id: string;
+          creator_plate_id: string;
+          sort_order?: number;
+        };
+        Update: {
+          sort_order?: number;
+        };
+        Relationships: [];
+      };
       plate_orders: {
         Row: {
           id: string;

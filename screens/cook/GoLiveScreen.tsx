@@ -4,7 +4,6 @@ import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -16,14 +15,15 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import {
   createCreatorPost,
-  createPlatesForPost,
   displayHandle,
   endLivePost,
 } from '../../lib/creatorPosts';
+import { PlatePickerSection } from '../../components/cook/PlatePickerSection';
 import { uploadShortToBunny } from '../../lib/bunnyUpload';
 import { isBunnyApiConfigured } from '../../lib/bunnyApi';
-import { uploadPlateImage } from '../../lib/plates';
+import { linkPlatesToPost } from '../../lib/plates';
 import { supabase } from '../../lib/supabase';
+import { CreatePlateScreen } from './CreatePlateScreen';
 import { cookTheme } from '../../theme/cookTheme';
 
 type CreatorMode = 'short' | 'live';
@@ -33,26 +33,6 @@ type LiveSession = {
   streamKey: string;
   rtmpUrl: string;
 };
-
-type DraftPlate = {
-  id: string;
-  label: string;
-  description: string;
-  price: string;
-  imageUri: string | null;
-  imageMime: string;
-};
-
-function newDraftPlate(): DraftPlate {
-  return {
-    id: `${Date.now()}-${Math.random()}`,
-    label: '',
-    description: '',
-    price: '',
-    imageUri: null,
-    imageMime: 'image/jpeg',
-  };
-}
 
 function Field({
   label,
@@ -96,207 +76,6 @@ function Field({
   );
 }
 
-function PlatePhotoPicker({
-  imageUri,
-  onPick,
-}: {
-  imageUri: string | null;
-  onPick: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPick}
-      className="mb-4 overflow-hidden rounded-2xl border border-dashed border-white/20"
-      style={{ backgroundColor: cookTheme.surface, height: 140 }}
-    >
-      {imageUri ? (
-        <Image source={{ uri: imageUri }} className="h-full w-full" resizeMode="cover" />
-      ) : (
-        <View className="flex-1 items-center justify-center px-4">
-          <Ionicons name="camera-outline" size={28} color={cookTheme.accentSoft} />
-          <Text
-            className="mt-2 text-center text-[13px] text-white"
-            style={{ fontFamily: 'DMSans_600SemiBold' }}
-          >
-            Add plate photo
-          </Text>
-          <Text
-            className="mt-1 text-center text-[11px]"
-            style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
-          >
-            Required · show what buyers will get
-          </Text>
-        </View>
-      )}
-      {imageUri ? (
-        <View
-          className="absolute bottom-2 right-2 flex-row items-center rounded-full px-2.5 py-1"
-          style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
-        >
-          <Ionicons name="camera-outline" size={14} color="#fff" />
-          <Text className="ml-1 text-[11px] text-white" style={{ fontFamily: 'DMSans_500Medium' }}>
-            Change photo
-          </Text>
-        </View>
-      ) : null}
-    </Pressable>
-  );
-}
-
-async function pickPlatePhoto(): Promise<{ uri: string; mimeType: string } | null> {
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) {
-    Alert.alert('Permission needed', 'Allow access to your photo library to add a plate picture.');
-    return null;
-  }
-
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ['images'],
-    quality: 0.85,
-    allowsEditing: true,
-    aspect: [4, 3],
-  });
-
-  if (result.canceled || !result.assets[0]) return null;
-
-  return {
-    uri: result.assets[0].uri,
-    mimeType: result.assets[0].mimeType ?? 'image/jpeg',
-  };
-}
-
-function PlateEditorSection({
-  draftPlates,
-  onChangePlates,
-}: {
-  draftPlates: DraftPlate[];
-  onChangePlates: (plates: DraftPlate[]) => void;
-}) {
-  return (
-    <>
-      {draftPlates.length > 0 ? (
-        <View className="mb-4 gap-3">
-          <Text
-            className="text-[12px] uppercase tracking-wide"
-            style={{ fontFamily: 'DMSans_600SemiBold', color: cookTheme.textMuted }}
-          >
-            Plates for sale
-          </Text>
-          {draftPlates.map((plate, index) => (
-            <View
-              key={plate.id}
-              className="rounded-xl border border-white/10 p-3"
-              style={{ backgroundColor: cookTheme.surfaceElevated }}
-            >
-              <View className="mb-2 flex-row items-center justify-between">
-                <Text
-                  className="text-[12px] uppercase tracking-wide"
-                  style={{ fontFamily: 'DMSans_600SemiBold', color: cookTheme.textMuted }}
-                >
-                  Plate {index + 1}
-                </Text>
-                <Pressable
-                  onPress={() => onChangePlates(draftPlates.filter((p) => p.id !== plate.id))}
-                  hitSlop={8}
-                >
-                  <Ionicons name="close-circle-outline" size={20} color={cookTheme.textMuted} />
-                </Pressable>
-              </View>
-              <PlatePhotoPicker
-                imageUri={plate.imageUri}
-                onPick={() => {
-                  void pickPlatePhoto().then((picked) => {
-                    if (!picked) return;
-                    onChangePlates(
-                      draftPlates.map((p) =>
-                        p.id === plate.id
-                          ? { ...p, imageUri: picked.uri, imageMime: picked.mimeType }
-                          : p,
-                      ),
-                    );
-                  });
-                }}
-              />
-              <Field
-                label="Plate name"
-                value={plate.label}
-                onChangeText={(v) =>
-                  onChangePlates(
-                    draftPlates.map((p) => (p.id === plate.id ? { ...p, label: v } : p)),
-                  )
-                }
-                placeholder="Taste plate, Full plate…"
-              />
-              <Field
-                label="Price ($)"
-                value={plate.price}
-                onChangeText={(v) =>
-                  onChangePlates(
-                    draftPlates.map((p) => (p.id === plate.id ? { ...p, price: v } : p)),
-                  )
-                }
-                placeholder="12"
-                keyboardType="numeric"
-              />
-            </View>
-          ))}
-        </View>
-      ) : null}
-
-      {draftPlates.length < 5 ? (
-        <Pressable
-          onPress={() => onChangePlates([...draftPlates, newDraftPlate()])}
-          className="mb-5 flex-row items-center justify-center rounded-2xl border border-dashed border-white/15 py-3.5"
-          style={{ backgroundColor: cookTheme.surfaceElevated }}
-        >
-          <Ionicons name="add-circle-outline" size={20} color={cookTheme.accentSoft} />
-          <Text className="ml-2 text-[14px] text-white" style={{ fontFamily: 'DMSans_500Medium' }}>
-            Add plate
-          </Text>
-        </Pressable>
-      ) : null}
-    </>
-  );
-}
-
-function draftPlatesHaveIncomplete(draftPlates: DraftPlate[]): boolean {
-  return draftPlates.some(
-    (p) => Boolean(p.label.trim() || p.price || p.imageUri) &&
-      !(p.label.trim() && Number(p.price) > 0 && p.imageUri),
-  );
-}
-
-function validPlatesFromDraft(draftPlates: DraftPlate[]) {
-  return draftPlates
-    .filter((p) => p.label.trim() && Number(p.price) > 0 && p.imageUri)
-    .map((p, index) => ({
-      label: p.label.trim(),
-      description: p.description.trim(),
-      price: Number(p.price),
-      sort_order: index,
-      imageUri: p.imageUri!,
-      imageMime: p.imageMime,
-      draftId: p.id,
-    }));
-}
-
-async function uploadPlatesForPost(
-  userId: string,
-  postId: string,
-  plates: ReturnType<typeof validPlatesFromDraft>,
-) {
-  const rows = await Promise.all(
-    plates.map(async (plate) => ({
-      label: plate.label,
-      description: plate.description,
-      price: plate.price,
-      sort_order: plate.sort_order,
-      image_url: await uploadPlateImage(userId, postId, plate.draftId, plate.imageUri, plate.imageMime),
-    })),
-  );
-  await createPlatesForPost(postId, rows);
-}
-
 export function GoLiveScreen() {
   const { user, profile } = useAuth();
   const [mode, setMode] = useState<CreatorMode>('short');
@@ -315,7 +94,9 @@ export function GoLiveScreen() {
   const [minDonation, setMinDonation] = useState('8');
   const [donationGoal, setDonationGoal] = useState('100');
   const [readyInMinutes, setReadyInMinutes] = useState('30');
-  const [draftPlates, setDraftPlates] = useState<DraftPlate[]>([]);
+  const [selectedPlateIds, setSelectedPlateIds] = useState<string[]>([]);
+  const [createPlateOpen, setCreatePlateOpen] = useState(false);
+  const [plateCatalogRefreshKey, setPlateCatalogRefreshKey] = useState(0);
 
   const pickVideo = useCallback(async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -344,10 +125,6 @@ export function GoLiveScreen() {
     }
     if (!videoUri) {
       setError('Select a video to post.');
-      return;
-    }
-    if (draftPlatesHaveIncomplete(draftPlates)) {
-      setError('Each plate needs a name, price, and photo.');
       return;
     }
     if (!isBunnyApiConfigured) {
@@ -404,22 +181,22 @@ export function GoLiveScreen() {
         .update({
           bunny_video_id: bunny.videoId,
           thumbnail_url: bunny.thumbnailUrl,
+          cover_image: bunny.thumbnailUrl ?? profile?.avatar_url ?? null,
           status: 'published',
         })
         .eq('id', post.id);
 
       if (updateError) throw new Error(updateError.message);
 
-      const validPlates = validPlatesFromDraft(draftPlates);
-      if (validPlates.length) {
-        await uploadPlatesForPost(user.id, post.id, validPlates);
+      if (selectedPlateIds.length) {
+        await linkPlatesToPost(post.id, selectedPlateIds);
       }
 
       setMessage('Short uploaded to Bunny! It may take a minute to process, then check For You and your profile.');
       setVideoUri(null);
       setTitle('');
       setDescription('');
-      setDraftPlates([]);
+      setSelectedPlateIds([]);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
@@ -438,17 +215,13 @@ export function GoLiveScreen() {
     pickupNeighborhood,
     readyInMinutes,
     profile?.avatar_url,
-    draftPlates,
+    selectedPlateIds,
   ]);
 
   const startLive = useCallback(async () => {
     if (!user) return;
     if (!title.trim()) {
       setError('Add a title before going live.');
-      return;
-    }
-    if (draftPlatesHaveIncomplete(draftPlates)) {
-      setError('Each plate needs a name, price, and photo.');
       return;
     }
 
@@ -479,9 +252,8 @@ export function GoLiveScreen() {
 
       if (!post) throw new Error('Could not start live session');
 
-      const validPlates = validPlatesFromDraft(draftPlates);
-      if (validPlates.length) {
-        await uploadPlatesForPost(user.id, post.id, validPlates);
+      if (selectedPlateIds.length) {
+        await linkPlatesToPost(post.id, selectedPlateIds);
       }
 
       setLiveSession({ postId: post.id, streamKey, rtmpUrl });
@@ -502,7 +274,7 @@ export function GoLiveScreen() {
     pickupNeighborhood,
     readyInMinutes,
     profile?.avatar_url,
-    draftPlates,
+    selectedPlateIds,
   ]);
 
   const stopLive = useCallback(async () => {
@@ -541,37 +313,71 @@ export function GoLiveScreen() {
         </Text>
 
         <View
-          className="mt-5 flex-row rounded-full p-1"
+          className="mt-5 flex-row items-center gap-2 rounded-full p-1"
           style={{ backgroundColor: cookTheme.surfaceElevated }}
         >
-          {(['short', 'live'] as const).map((tab) => {
-            const active = mode === tab;
-            return (
-              <Pressable
-                key={tab}
-                onPress={() => {
-                  setMode(tab);
-                  setError(null);
-                  setDraftPlates([]);
-                  if (tab === 'live') setVideoUri(null);
-                }}
-                className="flex-1 flex-row items-center justify-center rounded-full py-2.5"
-                style={active ? { backgroundColor: cookTheme.accent } : undefined}
-              >
-                <Ionicons
-                  name={tab === 'short' ? 'film-outline' : 'radio-outline'}
-                  size={16}
-                  color="#fff"
-                />
-                <Text
-                  className="ml-1.5 text-[14px] text-white"
-                  style={{ fontFamily: active ? 'DMSans_600SemiBold' : 'DMSans_500Medium' }}
-                >
-                  {tab === 'short' ? 'Post short' : 'Go live'}
-                </Text>
-              </Pressable>
-            );
-          })}
+          <Pressable
+            onPress={() => {
+              setMode('short');
+              setCreatePlateOpen(false);
+              setError(null);
+              setSelectedPlateIds([]);
+            }}
+            className="flex-1 flex-row items-center justify-center rounded-full py-2.5"
+            style={mode === 'short' && !createPlateOpen ? { backgroundColor: cookTheme.accent } : undefined}
+          >
+            <Ionicons name="film-outline" size={16} color="#fff" />
+            <Text
+              className="ml-1.5 text-[13px] text-white"
+              style={{
+                fontFamily: mode === 'short' && !createPlateOpen ? 'DMSans_600SemiBold' : 'DMSans_500Medium',
+              }}
+            >
+              Post short
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => {
+              setCreatePlateOpen(true);
+              setError(null);
+            }}
+            className="flex-1 flex-row items-center justify-center rounded-full py-2.5"
+            style={createPlateOpen ? { backgroundColor: cookTheme.accent } : undefined}
+            accessibilityLabel="Create plate"
+          >
+            <Ionicons name="restaurant-outline" size={16} color="#fff" />
+            <Text
+              className="ml-1.5 text-[13px] text-white"
+              style={{
+                fontFamily: createPlateOpen ? 'DMSans_600SemiBold' : 'DMSans_500Medium',
+              }}
+            >
+              Create plate
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => {
+              setMode('live');
+              setCreatePlateOpen(false);
+              setError(null);
+              setSelectedPlateIds([]);
+              setVideoUri(null);
+            }}
+            className="flex-1 flex-row items-center justify-center rounded-full py-2.5"
+            style={mode === 'live' && !createPlateOpen ? { backgroundColor: cookTheme.accent } : undefined}
+          >
+            <Ionicons name="radio-outline" size={16} color="#fff" />
+            <Text
+              className="ml-1.5 text-[13px] text-white"
+              style={{
+                fontFamily: mode === 'live' && !createPlateOpen ? 'DMSans_600SemiBold' : 'DMSans_500Medium',
+              }}
+            >
+              Go live
+            </Text>
+          </Pressable>
         </View>
 
         <View
@@ -610,7 +416,14 @@ export function GoLiveScreen() {
                 placeholder="Chili crisp noodles"
               />
 
-              <PlateEditorSection draftPlates={draftPlates} onChangePlates={setDraftPlates} />
+              {user ? (
+                <PlatePickerSection
+                  creatorId={user.id}
+                  selectedIds={selectedPlateIds}
+                  onChangeSelected={setSelectedPlateIds}
+                  refreshKey={plateCatalogRefreshKey}
+                />
+              ) : null}
 
               <Pressable
                 onPress={() => void publishShort()}
@@ -679,7 +492,14 @@ export function GoLiveScreen() {
                 placeholder="What's cooking tonight?"
               />
 
-              <PlateEditorSection draftPlates={draftPlates} onChangePlates={setDraftPlates} />
+              {user ? (
+                <PlatePickerSection
+                  creatorId={user.id}
+                  selectedIds={selectedPlateIds}
+                  onChangeSelected={setSelectedPlateIds}
+                  refreshKey={plateCatalogRefreshKey}
+                />
+              ) : null}
 
               <Pressable
                 onPress={() => void startLive()}
@@ -719,6 +539,15 @@ export function GoLiveScreen() {
           ) : null}
         </View>
       </ScrollView>
+
+      {createPlateOpen ? (
+        <View className="absolute inset-0 z-50">
+          <CreatePlateScreen
+            onBack={() => setCreatePlateOpen(false)}
+            onCreated={() => setPlateCatalogRefreshKey((k) => k + 1)}
+          />
+        </View>
+      ) : null}
     </KeyboardAvoidingView>
   );
 }

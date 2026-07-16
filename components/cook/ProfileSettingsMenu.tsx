@@ -108,7 +108,7 @@ export function ProfileSettingsMenu({ visible, onClose }: Props) {
         title="Help & Support"
         body={`Need help with CookMapz?
 
-• Pickup issues: message the cook from your Orders tab
+• Pickup issues: message the cook from your Cart tab
 • Account problems: support@cookmapz.app
 • Report unsafe food or behavior: safety@cookmapz.app
 

@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Image, ScrollView, Text, View } from 'react-native';
-import { resolveStreamThumbnail } from '../../lib/bunnyStream';
 import { cookTheme } from '../../theme/cookTheme';
 import type { ClaimedPlate, OrderStatus } from './types';
 
@@ -72,12 +71,6 @@ export function OrdersScreen({ plates, loading }: Props) {
             </View>
           ) : (
             plates.map((order) => {
-              const cover = resolveStreamThumbnail(
-                order.stream.coverImage,
-                order.stream.bunnyVideoId,
-                order.stream.thumbnailUrl,
-              );
-
               return (
                 <View
                   key={order.id}
@@ -85,7 +78,17 @@ export function OrdersScreen({ plates, loading }: Props) {
                   style={{ backgroundColor: cookTheme.surface }}
                 >
                   <View className="flex-row">
-                    <Image source={{ uri: cover }} className="h-28 w-24" />
+                    {order.plateImageUrl ? (
+                      <Image
+                        source={{ uri: order.plateImageUrl }}
+                        className="h-28 w-24 bg-white/5"
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View className="h-28 w-24 items-center justify-center bg-white/5">
+                        <Ionicons name="restaurant-outline" size={28} color={cookTheme.textMuted} />
+                      </View>
+                    )}
                     <View className="flex-1 justify-center px-3.5 py-3">
                       <View className="flex-row items-start justify-between gap-2">
                         <Text

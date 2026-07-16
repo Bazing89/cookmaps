@@ -10,7 +10,6 @@ import {
   Pressable,
   Text,
   View,
-  useWindowDimensions,
   type ViewToken,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,9 +20,14 @@ import { ProfileSettingsMenu } from '../../components/cook/ProfileSettingsMenu';
 import { formatCount } from '../../data/lives';
 import { useAuth } from '../../contexts/AuthContext';
 import { deleteCreatorPost, applyCreatorProfileToStream, displayHandle, fetchPostsByCreator } from '../../lib/creatorPosts';
+import { confirmDestructive, showAlert } from '../../lib/confirmAction';
+import { useWebLayout } from '../../hooks/useWebLayout';
 import { isProfileSetupIncomplete, updateUserProfile, uploadProfileAvatar } from '../../lib/profiles';
-import { resolveStreamThumbnail } from '../../lib/bunnyStream';
+import { StreamThumbnailImage } from '../../components/cook/StreamThumbnailImage';
 import { EditProfileScreen } from './EditProfileScreen';
+import { CreatePlateScreen } from './CreatePlateScreen';
+import { fetchCreatorPlates } from '../../lib/plates';
+import type { CreatorPlate } from '../../types/creator';
 import { cookTheme } from '../../theme/cookTheme';
 import type { LiveStream } from '../../types/live';
 
@@ -97,13 +101,21 @@ function VideoOptionsMenu({
   );
 }
 
+type ProfileTab = 'videos' | 'plates';
+
 export function ProfileScreen() {
   const { user, profile, refreshProfile } = useAuth();
-  const { width, height } = useWindowDimensions();
+  const { height, profileWidth, isWeb, isDesktop } = useWebLayout();
   const insets = useSafeAreaInsets();
   const bottomNavInset = 58 + Math.max(insets.bottom, 10);
-  const cellSize = Math.floor((width - 40 - 4) / 3);
+  const profilePadding = 40;
+  const gridGap = 2;
+  const cellSize = Math.floor((profileWidth - profilePadding - gridGap * 2) / 3);
+  const plateCellSize = Math.floor((profileWidth - profilePadding - gridGap) / 2);
   const [streams, setStreams] = useState<LiveStream[]>([]);
+  const [catalogPlates, setCatalogPlates] = useState<CreatorPlate[]>([]);
+  const [profileTab, setProfileTab] = useState<ProfileTab>('videos');
+  const [platesLoading, setPlatesLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -111,6 +123,8 @@ export function ProfileScreen() {
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [viewerMenuOpen, setViewerMenuOpen] = useState(false);
+  const [gridMenuId, setGridMenuId] = useState<string | null>(null);
+  const [createPlateOpen, setCreatePlateOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [commentStream, setCommentStream] = useState<LiveStream | null>(null);
@@ -132,6 +146,24 @@ export function ProfileScreen() {
     }
   }, [user?.id]);
 
+  const loadCatalogPlates = useCallback(async () => {
+    if (!user?.id) {
+      setCatalogPlates([]);
+      setPlatesLoading(false);
+      return;
+    }
+    setPlatesLoading(true);
+    try {
+      setCatalogPlates(await fetchCreatorPlates(user.id));
+    } finally {
+      setPlatesLoading(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    void loadCatalogPlates();
+  }, [loadCatalogPlates]);
+
   useEffect(() => {
     void loadVideos();
   }, [loadVideos]);
@@ -152,40 +184,35 @@ export function ProfileScreen() {
     setViewerOpen(true);
   }, []);
 
-  const confirmDelete = useCallback(
-    (stream: LiveStream) => {
-      Alert.alert(
+  const deleteStream = useCallback(
+    async (stream: LiveStream) => {
+      if (!user) return;
+
+      const confirmed = await confirmDestructive(
         'Delete video?',
         `Remove "${stream.dishName}" from your profile? This cannot be undone.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: () => {
-              void (async () => {
-                if (!user) return;
-                setDeletingId(stream.id);
-                try {
-                  await deleteCreatorPost(stream.id, user.id, {
-                    bunnyVideoId: stream.bunnyVideoId,
-                    videoUrl: stream.videoUrl,
-                  });
-                  setStreams((prev) => prev.filter((s) => s.id !== stream.id));
-                  setViewerOpen(false);
-                } catch (e) {
-                  Alert.alert(
-                    'Could not delete',
-                    e instanceof Error ? e.message : 'Delete failed. Try again.',
-                  );
-                } finally {
-                  setDeletingId(null);
-                }
-              })();
-            },
-          },
-        ],
       );
+      if (!confirmed) return;
+
+      setDeletingId(stream.id);
+      setViewerMenuOpen(false);
+      setGridMenuId(null);
+
+      try {
+        await deleteCreatorPost(stream.id, user.id, {
+          bunnyVideoId: stream.bunnyVideoId,
+          videoUrl: stream.videoUrl,
+        });
+        setStreams((prev) => prev.filter((s) => s.id !== stream.id));
+        setViewerOpen(false);
+      } catch (e) {
+        showAlert(
+          'Could not delete',
+          e instanceof Error ? e.message : 'Delete failed. Try again.',
+        );
+      } finally {
+        setDeletingId(null);
+      }
     },
     [user],
   );
@@ -244,7 +271,18 @@ export function ProfileScreen() {
   }, []);
 
   return (
-    <View className="relative flex-1" style={{ backgroundColor: cookTheme.bg }}>
+    <View
+      className={`relative flex-1${isWeb ? ' items-center' : ''}`}
+      style={{ backgroundColor: cookTheme.bg }}
+    >
+      <View
+        className="flex-1 self-center"
+        style={{
+          width: '100%',
+          maxWidth: profileWidth,
+          ...(isWeb && isDesktop ? { alignSelf: 'center' as const } : undefined),
+        }}
+      >
       <View className="flex-row items-center justify-between px-5 pt-4 pb-1">
         <Text className="text-[28px] text-white" style={{ fontFamily: 'Syne_800ExtraBold' }}>
           Profile
@@ -260,17 +298,33 @@ export function ProfileScreen() {
         </Pressable>
       </View>
 
-      {loading ? (
+      {loading && profileTab === 'videos' ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color={cookTheme.accent} size="large" />
         </View>
       ) : (
-        <FlatList
-          data={displayStreams}
+        <FlatList<LiveStream | CreatorPlate>
+          key={profileTab}
+          data={profileTab === 'videos' ? displayStreams : catalogPlates}
           keyExtractor={(item) => item.id}
-          numColumns={3}
-          columnWrapperStyle={{ gap: 2, marginBottom: 2 }}
+          numColumns={profileTab === 'videos' ? 3 : 2}
+          columnWrapperStyle={
+            profileTab === 'videos'
+              ? {
+                  gap: gridGap,
+                  marginBottom: gridGap,
+                  width: cellSize * 3 + gridGap * 2,
+                  alignSelf: 'center',
+                }
+              : {
+                  gap: gridGap,
+                  marginBottom: gridGap,
+                  width: plateCellSize * 2 + gridGap,
+                  alignSelf: 'center',
+                }
+          }
           contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomNavInset + 16 }}
+          onScrollBeginDrag={() => setGridMenuId(null)}
           ListHeaderComponent={
             <View className="mb-5 items-center pt-2">
               {setupIncomplete ? (
@@ -343,72 +397,178 @@ export function ProfileScreen() {
 
               <View className="mt-5 flex-row gap-8">
                 <Stat label="Videos" value={String(streams.length)} />
-                <Stat label="Followers" value={formatCount(profile?.follower_count ?? 0)} />
+                <Stat label="Plates" value={String(catalogPlates.length)} />
                 <Stat label="Likes" value={formatCount(totalLikes)} />
               </View>
 
-              <View className="mt-6 w-full flex-row border-b border-white/10 pb-2">
-                <View className="flex-1 items-center border-b-2" style={{ borderColor: cookTheme.accent }}>
-                  <Ionicons name="grid-outline" size={20} color="#fff" />
-                </View>
+              <View className="mt-6 w-full flex-row border-b border-white/10">
+                {(['videos', 'plates'] as const).map((tab) => {
+                  const active = profileTab === tab;
+                  return (
+                    <Pressable
+                      key={tab}
+                      onPress={() => setProfileTab(tab)}
+                      className="flex-1 items-center border-b-2 pb-2 pt-1"
+                      style={{ borderColor: active ? cookTheme.accent : 'transparent' }}
+                    >
+                      <Ionicons
+                        name={tab === 'videos' ? 'grid-outline' : 'restaurant-outline'}
+                        size={20}
+                        color={active ? '#fff' : cookTheme.textMuted}
+                      />
+                      <Text
+                        className="mt-1 text-[11px] capitalize"
+                        style={{
+                          fontFamily: active ? 'DMSans_600SemiBold' : 'DMSans_400Regular',
+                          color: active ? '#fff' : cookTheme.textMuted,
+                        }}
+                      >
+                        {tab}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
+
+              {profileTab === 'plates' ? (
+                <Pressable
+                  onPress={() => setCreatePlateOpen(true)}
+                  className="mt-4 w-full flex-row items-center justify-center rounded-2xl border border-dashed border-white/15 py-3"
+                  style={{ backgroundColor: cookTheme.surfaceElevated }}
+                >
+                  <Ionicons name="add-circle-outline" size={20} color={cookTheme.accentSoft} />
+                  <Text className="ml-2 text-[14px] text-white" style={{ fontFamily: 'DMSans_600SemiBold' }}>
+                    Create plate
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           }
           ListEmptyComponent={
-            <View className="mt-6 items-center px-6">
-              <Ionicons name="videocam-outline" size={40} color={cookTheme.textMuted} />
-              <Text
-                className="mt-3 text-center text-[15px] text-white"
-                style={{ fontFamily: 'DMSans_500Medium' }}
-              >
-                No videos yet
-              </Text>
-              <Text
-                className="mt-1 text-center text-[13px] leading-5"
-                style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
-              >
-                Post a short or go live from the Cook tab to fill your profile.
-              </Text>
-            </View>
+            profileTab === 'videos' ? (
+              <View className="mt-6 items-center px-6">
+                <Ionicons name="videocam-outline" size={40} color={cookTheme.textMuted} />
+                <Text
+                  className="mt-3 text-center text-[15px] text-white"
+                  style={{ fontFamily: 'DMSans_500Medium' }}
+                >
+                  No videos yet
+                </Text>
+                <Text
+                  className="mt-1 text-center text-[13px] leading-5"
+                  style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
+                >
+                  Post a short or go live from the Cook tab to fill your profile.
+                </Text>
+              </View>
+            ) : platesLoading ? (
+              <View className="mt-8 items-center">
+                <ActivityIndicator color={cookTheme.accent} />
+              </View>
+            ) : (
+              <View className="mt-6 items-center px-6">
+                <Ionicons name="restaurant-outline" size={40} color={cookTheme.textMuted} />
+                <Text
+                  className="mt-3 text-center text-[15px] text-white"
+                  style={{ fontFamily: 'DMSans_500Medium' }}
+                >
+                  No plates yet
+                </Text>
+                <Text
+                  className="mt-1 text-center text-[13px] leading-5"
+                  style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
+                >
+                  Tap Create plate to add what you are selling — then attach plates when you post a short.
+                </Text>
+              </View>
+            )
           }
           renderItem={({ item, index }) => {
-            const thumb = resolveStreamThumbnail(item.coverImage, item.bunnyVideoId, item.thumbnailUrl);
-            const isDeleting = deletingId === item.id;
-            return (
-              <Pressable
-                onPress={() => openVideo(index)}
-                disabled={isDeleting}
-                style={{ width: cellSize, height: cellSize * 1.35, opacity: isDeleting ? 0.5 : 1 }}
-              >
-                <Image source={{ uri: thumb }} className="h-full w-full" resizeMode="cover" />
-                {item.isLive ? (
-                  <View
-                    className="absolute left-1 top-1 rounded px-1.5 py-0.5"
-                    style={{ backgroundColor: cookTheme.live }}
-                  >
-                    <Text
-                      className="text-[9px] font-bold text-white"
-                      style={{ fontFamily: 'DMSans_600SemiBold' }}
-                    >
-                      LIVE
+            if (profileTab === 'plates') {
+              const plate = item as CreatorPlate;
+              return (
+                <View
+                  style={{
+                    width: plateCellSize,
+                    height: plateCellSize * 1.15,
+                    marginBottom: gridGap,
+                  }}
+                >
+                  {plate.image_url ? (
+                    <Image source={{ uri: plate.image_url }} className="h-full w-full rounded-xl" resizeMode="cover" />
+                  ) : (
+                    <View className="h-full w-full items-center justify-center rounded-xl bg-white/5">
+                      <Ionicons name="restaurant-outline" size={28} color={cookTheme.textMuted} />
+                    </View>
+                  )}
+                  <View className="absolute bottom-0 left-0 right-0 rounded-b-xl px-2 py-2" style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}>
+                    <Text className="text-[12px] text-white" style={{ fontFamily: 'DMSans_600SemiBold' }} numberOfLines={1}>
+                      {plate.name}
+                    </Text>
+                    <Text className="text-[11px] text-white/85" style={{ fontFamily: 'DMSans_500Medium' }}>
+                      ${Number(plate.price)}
                     </Text>
                   </View>
-                ) : null}
-                {item.postType === 'short' ? (
-                  <View className="absolute right-1 top-1">
-                    <Ionicons name="film-outline" size={14} color="#fff" />
-                  </View>
-                ) : null}
-                <View className="absolute bottom-1 left-1 flex-row items-center">
-                  <Ionicons name="play" size={12} color="#fff" />
-                  <Text
-                    className="ml-0.5 text-[11px] text-white"
-                    style={{ fontFamily: 'DMSans_600SemiBold' }}
-                  >
-                    {formatCount(item.viewerCount || item.likeCount)}
-                  </Text>
                 </View>
-              </Pressable>
+              );
+            }
+
+            const stream = item as LiveStream;
+            const isDeleting = deletingId === stream.id;
+            const menuOpen = gridMenuId === stream.id;
+            return (
+              <View style={{ width: cellSize, height: cellSize * 1.35, opacity: isDeleting ? 0.5 : 1 }}>
+                {menuOpen ? (
+                  <Pressable
+                    className="absolute inset-0 z-20"
+                    onPress={() => setGridMenuId(null)}
+                  />
+                ) : null}
+                <Pressable
+                  onPress={() => openVideo(index)}
+                  disabled={isDeleting}
+                  className="h-full w-full"
+                >
+                  <StreamThumbnailImage stream={stream} className="h-full w-full" />
+                  {stream.isLive ? (
+                    <View
+                      className="absolute left-1 top-1 rounded px-1.5 py-0.5"
+                      style={{ backgroundColor: cookTheme.live }}
+                    >
+                      <Text
+                        className="text-[9px] font-bold text-white"
+                        style={{ fontFamily: 'DMSans_600SemiBold' }}
+                      >
+                        LIVE
+                      </Text>
+                    </View>
+                  ) : null}
+                  {stream.postType === 'short' ? (
+                    <View className="absolute bottom-1 right-1">
+                      <Ionicons name="film-outline" size={14} color="#fff" />
+                    </View>
+                  ) : null}
+                  <View className="absolute bottom-1 left-1 flex-row items-center">
+                    <Ionicons name="play" size={12} color="#fff" />
+                    <Text
+                      className="ml-0.5 text-[11px] text-white"
+                      style={{ fontFamily: 'DMSans_600SemiBold' }}
+                    >
+                      {formatCount(stream.viewerCount || stream.likeCount)}
+                    </Text>
+                  </View>
+                </Pressable>
+                <View className="absolute right-1 top-1 z-30">
+                  <VideoOptionsMenu
+                    compact
+                    open={menuOpen}
+                    onToggle={() => setGridMenuId((current) => (current === stream.id ? null : stream.id))}
+                    onClose={() => setGridMenuId(null)}
+                    onDelete={() => void deleteStream(stream)}
+                    deleting={isDeleting}
+                  />
+                </View>
+              </View>
             );
           }}
         />
@@ -445,7 +605,7 @@ export function ProfileScreen() {
                 open={viewerMenuOpen}
                 onToggle={() => setViewerMenuOpen((value) => !value)}
                 onClose={() => setViewerMenuOpen(false)}
-                onDelete={() => confirmDelete(displayStreams[viewerIndex])}
+                onDelete={() => void deleteStream(displayStreams[viewerIndex])}
                 deleting={deletingId === displayStreams[viewerIndex]?.id}
               />
             ) : null}
@@ -503,6 +663,16 @@ export function ProfileScreen() {
           <EditProfileScreen onBack={() => setEditProfileOpen(false)} />
         </View>
       ) : null}
+
+      {createPlateOpen ? (
+        <View className="absolute inset-0 z-50">
+          <CreatePlateScreen
+            onBack={() => setCreatePlateOpen(false)}
+            onCreated={() => void loadCatalogPlates()}
+          />
+        </View>
+      ) : null}
+      </View>
     </View>
   );
 }

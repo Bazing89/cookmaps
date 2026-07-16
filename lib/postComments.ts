@@ -99,10 +99,17 @@ export async function createComment(input: {
 }
 
 export async function deleteComment(commentId: string): Promise<void> {
-  const { error } = await supabase.from('post_comments').delete().eq('id', commentId);
+  const { data, error } = await supabase
+    .from('post_comments')
+    .delete()
+    .eq('id', commentId)
+    .select('id');
 
   if (error) {
     throw new Error(error.message);
+  }
+  if (!data?.length) {
+    throw new Error('Comment not found or you do not have permission to delete it.');
   }
 }
 

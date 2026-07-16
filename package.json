@@ -12,6 +12,7 @@
     "export:web": "expo export -p web",
     "prebuild": "expo prebuild",
     "typecheck": "tsc --noEmit",
+    "seed:demo": "node scripts/seed_demo_content.mjs",
     "postinstall": "patch-package"
   },
   "dependencies": {

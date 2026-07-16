@@ -6,43 +6,50 @@ import { SideNav } from './SideNav';
 import { useAuth } from '../../hooks/useAuth';
 import { UserLocationProvider } from '../../hooks/useUserLocation';
 import { useWebLayout } from '../../hooks/useWebLayout';
+import { CartScreen } from '../../screens/cook/CartScreen';
 import { CreatorProfileScreen } from '../../screens/cook/CreatorProfileScreen';
 import { FeedScreen } from '../../screens/cook/FeedScreen';
 import { GoLiveScreen } from '../../screens/cook/GoLiveScreen';
 import { LoginScreen } from '../../screens/cook/LoginScreen';
 import { MapScreen } from '../../screens/cook/MapScreen';
-import { OrdersScreen } from '../../screens/cook/OrdersScreen';
 import { ProfileScreen } from '../../screens/cook/ProfileScreen';
-import type { ClaimedPlate } from '../../screens/cook/types';
+import type { CartItem, ClaimedPlate } from '../../screens/cook/types';
 import { createPlateOrder, fetchOrderHistory } from '../../lib/plateOrders';
 import { cookTheme } from '../../theme/cookTheme';
-import type { LiveStream, TabId } from '../../types/live';
+import type { LiveStream, PlateOffering, TabId } from '../../types/live';
 
 type CreatorOverlay = {
   creatorKey: string;
   startPostId?: string;
 };
 
+function cartItemKey(streamId: string, plateId: string) {
+  return `${streamId}:${plateId}`;
+}
+
 export function AppShell() {
   const { user, loading, configured } = useAuth();
   const { isDesktop } = useWebLayout();
   const { height, width } = useWindowDimensions();
   const [activeTab, setActiveTab] = useState<TabId>('live');
-  const [plates, setPlates] = useState<ClaimedPlate[]>([]);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [orders, setOrders] = useState<ClaimedPlate[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [cartView, setCartView] = useState<'cart' | 'orders'>('cart');
   const [creatorOverlay, setCreatorOverlay] = useState<CreatorOverlay | null>(null);
 
   useEffect(() => {
     if (!user) {
-      setPlates([]);
+      setOrders([]);
       return;
     }
 
     let cancelled = false;
     setOrdersLoading(true);
     fetchOrderHistory(user.id)
-      .then((orders) => {
-        if (!cancelled) setPlates(orders);
+      .then((history) => {
+        if (!cancelled) setOrders(history);
       })
       .finally(() => {
         if (!cancelled) setOrdersLoading(false);
@@ -53,7 +60,33 @@ export function AppShell() {
     };
   }, [user]);
 
-  const onDonated = useCallback(
+  const addToCart = useCallback((stream: LiveStream, plate: PlateOffering) => {
+    setCartItems((prev) => {
+      const key = cartItemKey(stream.id, plate.id);
+      if (prev.some((item) => cartItemKey(item.stream.id, item.plateId) === key)) {
+        return prev;
+      }
+      return [
+        ...prev,
+        {
+          id: `cart-${key}-${Date.now()}`,
+          stream,
+          plateId: plate.id,
+          plateLabel: plate.label,
+          plateImageUrl: plate.imageUrl ?? null,
+          amount: plate.price,
+        },
+      ];
+    });
+    setCartView('cart');
+    setActiveTab('cart');
+  }, []);
+
+  const removeFromCart = useCallback((cartItemId: string) => {
+    setCartItems((prev) => prev.filter((item) => item.id !== cartItemId));
+  }, []);
+
+  const placeOrder = useCallback(
     async (stream: LiveStream, amount: number, plateId?: string, plateLabel?: string) => {
       const label =
         plateLabel ??
@@ -67,13 +100,16 @@ export function AppShell() {
         claimedAt: Date.now(),
         plateId,
         plateLabel: label,
+        plateImageUrl:
+          stream.plates?.find((plate) => plate.id === plateId)?.imageUrl ??
+          stream.plates?.find((plate) => plate.label === label)?.imageUrl ??
+          null,
         status: 'confirmed',
       };
 
-      setPlates((prev) => [optimistic, ...prev]);
-      setActiveTab('map');
+      setOrders((prev) => [optimistic, ...prev]);
 
-      if (!user) return;
+      if (!user) return optimistic;
 
       try {
         const row = await createPlateOrder({
@@ -84,23 +120,43 @@ export function AppShell() {
           amount,
         });
 
-        setPlates((prev) =>
-          prev.map((order) =>
-            order.id === optimistic.id
-              ? {
-                  ...order,
-                  id: row?.id ?? order.id,
-                  claimedAt: row ? new Date(row.created_at).getTime() : order.claimedAt,
-                }
-              : order,
-          ),
-        );
+        if (row) {
+          setOrders((prev) =>
+            prev.map((order) =>
+              order.id === optimistic.id
+                ? {
+                    ...order,
+                    id: row.id,
+                    claimedAt: new Date(row.created_at).getTime(),
+                  }
+                : order,
+            ),
+          );
+        }
       } catch (e) {
         console.warn('[AppShell] save order failed:', e);
       }
+
+      return optimistic;
     },
     [user],
   );
+
+  const checkoutCart = useCallback(async () => {
+    if (!cartItems.length) return;
+
+    setCheckoutBusy(true);
+    try {
+      for (const item of cartItems) {
+        await placeOrder(item.stream, item.amount, item.plateId, item.plateLabel);
+      }
+      setCartItems([]);
+      setCartView('orders');
+      setActiveTab('cart');
+    } finally {
+      setCheckoutBusy(false);
+    }
+  }, [cartItems, placeOrder]);
 
   const onOpenCreator = useCallback((creatorKey: string, postId?: string) => {
     setCreatorOverlay({ creatorKey, startPostId: postId });
@@ -126,16 +182,27 @@ export function AppShell() {
   let content: ReactNode;
   switch (activeTab) {
     case 'live':
-      content = <FeedScreen onDonated={onDonated} onOpenCreator={onOpenCreator} />;
+      content = <FeedScreen onAddToCart={addToCart} onOpenCreator={onOpenCreator} />;
       break;
     case 'map':
-      content = <MapScreen plates={plates} />;
+      content = <MapScreen plates={orders} onAddToCart={addToCart} />;
       break;
     case 'go-live':
       content = <GoLiveScreen />;
       break;
-    case 'orders':
-      content = <OrdersScreen plates={plates} loading={ordersLoading} />;
+    case 'cart':
+      content = (
+        <CartScreen
+          cartItems={cartItems}
+          orders={orders}
+          ordersLoading={ordersLoading}
+          checkoutBusy={checkoutBusy}
+          view={cartView}
+          onViewChange={setCartView}
+          onRemoveFromCart={removeFromCart}
+          onCheckout={() => void checkoutCart()}
+        />
+      );
       break;
     case 'profile':
       content = <ProfileScreen />;
@@ -161,7 +228,11 @@ export function AppShell() {
             <View className="flex-1">{content}</View>
             {!isDesktop ? (
               <View style={{ zIndex: 100 }}>
-                <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+                <BottomNav
+                  activeTab={activeTab}
+                  onTabChange={setActiveTab}
+                  cartCount={cartItems.length}
+                />
               </View>
             ) : null}
             {creatorOverlay ? (
@@ -170,7 +241,17 @@ export function AppShell() {
                   creatorKey={creatorOverlay.creatorKey}
                   startPostId={creatorOverlay.startPostId}
                   onBack={() => setCreatorOverlay(null)}
-                  onDonate={(stream) => onDonated(stream, stream.minDonation)}
+                  onDonate={(stream) => {
+                    const plate = stream.plates?.[0];
+                    if (plate) addToCart(stream, plate);
+                    else
+                      addToCart(stream, {
+                        id: `default-${stream.id}`,
+                        label: `Plate · $${stream.minDonation}`,
+                        description: stream.dishDescription,
+                        price: stream.minDonation,
+                      });
+                  }}
                 />
               </View>
             ) : null}

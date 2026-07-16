@@ -1,14 +1,34 @@
 import type { LiveStream, PlateOffering } from '../types/live';
-import type { CreatePlateInput, CreatePostInput, CreatorPost, CreatorProfile, PostPlateRow } from '../types/creator';
+import type {
+  CreatePlateInput,
+  CreatePostInput,
+  CreatorPlate,
+  CreatorPost,
+  CreatorProfile,
+  PostPlateLinkRow,
+  PostPlateRow,
+} from '../types/creator';
 import { isBunnyApiConfigured } from './bunnyApi';
 import { deleteBunnyVideo } from './bunnyUpload';
+import { bunnyThumbnailUrl, ensureBunnyCdnHostname, getBunnyCdnHostname } from './bunnyStream';
 import { supabase } from './supabase';
-
-const DEFAULT_AVATAR =
-  'https://images.unsplash.com/photo-1583394293214-28ded15ee548?w=200&h=200&fit=crop&crop=faces';
 
 const DEFAULT_COVER =
   'https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=1200&h=1800&fit=crop';
+
+const POST_SELECT =
+  '*, profiles(*), post_plates(*), post_plate_links(sort_order, creator_plates(*))';
+
+type ResolvedPlate = {
+  id: string;
+  label: string;
+  description: string;
+  ingredients?: string;
+  price: number;
+  quantity?: number | null;
+  imageUrl?: string | null;
+  sort_order: number;
+};
 
 export function displayHandle(profile: Pick<CreatorProfile, 'handle' | 'display_name'>): string {
   if (profile.handle) return profile.handle.startsWith('@') ? profile.handle : `@${profile.handle}`;
@@ -31,15 +51,62 @@ export function applyCreatorProfileToStream(
   };
 }
 
+function resolvePlatesFromPost(row: {
+  post_plate_links?: PostPlateLinkRow[];
+  post_plates?: PostPlateRow[];
+}): ResolvedPlate[] {
+  const links = row.post_plate_links ?? [];
+  if (links.length) {
+    return [...links]
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .filter((link) => link.creator_plates)
+      .map((link) => {
+        const plate = link.creator_plates as CreatorPlate;
+        return {
+          id: plate.id,
+          label: plate.name,
+          description: plate.description ?? '',
+          ingredients: plate.ingredients ?? '',
+          price: Number(plate.price),
+          imageUrl: plate.image_url,
+          sort_order: link.sort_order,
+        };
+      });
+  }
+
+  return [...(row.post_plates ?? [])]
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((plate) => ({
+      id: plate.id,
+      label: plate.label,
+      description: plate.description ?? '',
+      price: Number(plate.price),
+      quantity: plate.quantity,
+      imageUrl: plate.image_url,
+      sort_order: plate.sort_order,
+    }));
+}
+
+function mapResolvedPlatesToOfferings(plates: ResolvedPlate[]): PlateOffering[] {
+  return plates.map((p) => ({
+    id: p.id,
+    label: p.label,
+    description: p.description,
+    ingredients: p.ingredients,
+    price: p.price,
+    quantity: p.quantity,
+    imageUrl: p.imageUrl ?? null,
+  }));
+}
+
 export function mapPostToLiveStream(
   post: CreatorPost,
   profile: CreatorProfile,
-  plates: PostPlateRow[] = [],
+  plateSource?: { post_plate_links?: PostPlateLinkRow[]; post_plates?: PostPlateRow[] },
 ): LiveStream {
   const chefName = profile.display_name ?? 'Home Chef';
   const chefHandle = displayHandle(profile);
-
-  const sortedPlates = [...plates].sort((a, b) => a.sort_order - b.sort_order);
+  const resolvedPlates = plateSource ? resolvePlatesFromPost(plateSource) : [];
 
   return {
     id: post.id,
@@ -55,7 +122,13 @@ export function mapPostToLiveStream(
     dishName: post.title,
     dishDescription: post.description ?? '',
     cuisine: post.cuisine ?? 'Home cooking',
-    coverImage: post.cover_image ?? post.thumbnail_url ?? DEFAULT_COVER,
+    coverImage:
+      post.thumbnail_url?.trim() ||
+      (post.bunny_video_id && getBunnyCdnHostname()
+        ? bunnyThumbnailUrl(post.bunny_video_id)
+        : null) ||
+      post.cover_image?.trim() ||
+      DEFAULT_COVER,
     viewerCount: post.viewer_count,
     likeCount: post.like_count,
     donationGoal: Number(post.donation_goal),
@@ -69,30 +142,26 @@ export function mapPostToLiveStream(
     readyInMinutes: post.ready_in_minutes,
     isLive: post.is_live && post.status === 'live',
     tags: post.tags ?? [],
-    plates: sortedPlates.map((p) => ({
-      id: p.id,
-      label: p.label,
-      description: p.description ?? '',
-      price: Number(p.price),
-      quantity: p.quantity,
-      imageUrl: p.image_url ?? null,
-    })),
+    plates: mapResolvedPlatesToOfferings(resolvedPlates),
   };
 }
 
 type PostWithRelations = CreatorPost & {
   profiles: CreatorProfile;
   post_plates?: PostPlateRow[];
+  post_plate_links?: PostPlateLinkRow[];
 };
 
 function mapPostRow(row: PostWithRelations): LiveStream {
-  return mapPostToLiveStream(row, row.profiles, row.post_plates ?? []);
+  return mapPostToLiveStream(row, row.profiles, row);
 }
 
 export async function fetchAllCreatorPosts(): Promise<LiveStream[]> {
+  await ensureBunnyCdnHostname();
+
   const { data, error } = await supabase
     .from('creator_posts')
-    .select('*, profiles(*), post_plates(*)')
+    .select(POST_SELECT)
     .in('status', ['published', 'live', 'processing'])
     .order('created_at', { ascending: false });
 
@@ -113,6 +182,8 @@ export async function fetchCreatorProfile(creatorId: string): Promise<CreatorPro
 }
 
 export async function fetchPostsByCreator(creatorId: string): Promise<LiveStream[]> {
+  await ensureBunnyCdnHostname();
+
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('*')
@@ -123,7 +194,7 @@ export async function fetchPostsByCreator(creatorId: string): Promise<LiveStream
 
   const { data, error } = await supabase
     .from('creator_posts')
-    .select('*, post_plates(*)')
+    .select(`*, post_plates(*), post_plate_links(sort_order, creator_plates(*))`)
     .eq('creator_id', creatorId)
     .in('status', ['published', 'live', 'processing', 'ended'])
     .order('created_at', { ascending: false });
@@ -134,7 +205,7 @@ export async function fetchPostsByCreator(creatorId: string): Promise<LiveStream
   }
 
   return (data ?? []).map((post) =>
-    mapPostToLiveStream(post as CreatorPost, profile as CreatorProfile, (post as { post_plates?: PostPlateRow[] }).post_plates ?? []),
+    mapPostToLiveStream(post as CreatorPost, profile as CreatorProfile, post as PostWithRelations),
   );
 }
 
@@ -177,6 +248,7 @@ export async function createCreatorPost(
   return data as CreatorPost;
 }
 
+/** @deprecated Use linkPlatesToPost from lib/plates for catalog plates. */
 export async function createPlatesForPost(postId: string, plates: CreatePlateInput[]): Promise<void> {
   if (!plates.length) return;
 
@@ -231,13 +303,27 @@ export async function deleteCreatorPost(
     }
   }
 
-  const { error } = await supabase
+  const platePrefix = `${creatorId}/${postId}`;
+  const { data: plateFiles } = await supabase.storage.from('plate-images').list(platePrefix);
+  if (plateFiles?.length) {
+    const platePaths = plateFiles.map((file) => `${platePrefix}/${file.name}`);
+    const { error: plateStorageError } = await supabase.storage.from('plate-images').remove(platePaths);
+    if (plateStorageError) {
+      console.warn('[creatorPosts] plate image delete failed:', plateStorageError.message);
+    }
+  }
+
+  const { data, error } = await supabase
     .from('creator_posts')
     .delete()
     .eq('id', postId)
-    .eq('creator_id', creatorId);
+    .eq('creator_id', creatorId)
+    .select('id');
 
   if (error) throw new Error(error.message);
+  if (!data?.length) {
+    throw new Error('Post not found or you do not have permission to delete it.');
+  }
 }
 
 export async function uploadCreatorVideo(

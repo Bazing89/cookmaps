@@ -3,6 +3,13 @@
  * @see https://docs.bunny.net/docs/stream-overview
  */
 
+import {
+  fetchBunnyLibrary,
+  fetchBunnyVideos,
+  isBunnyApiConfigured,
+  resolveLibraryCdnHostname,
+} from './bunnyApi';
+
 let cdnHostname = process.env.EXPO_PUBLIC_BUNNY_STREAM_CDN_HOSTNAME ?? '';
 
 /** Bunny "Block direct URL" / allowed-domain checks expect an embed player referer. */
@@ -29,6 +36,19 @@ export function isBunnyCdnUrl(url: string): boolean {
 
 export function getBunnyCdnHostname(): string {
   return cdnHostname;
+}
+
+export async function ensureBunnyCdnHostname(): Promise<void> {
+  if (cdnHostname || !isBunnyApiConfigured) return;
+
+  try {
+    const [library, videos] = await Promise.all([fetchBunnyLibrary(), fetchBunnyVideos()]);
+    const hostname = resolveLibraryCdnHostname(library, videos[0]);
+    if (hostname) setBunnyCdnHostname(hostname);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.warn('[bunnyStream] Could not resolve Bunny CDN hostname:', message);
+  }
 }
 
 export const isBunnyStreamConfigured = (): boolean => Boolean(cdnHostname);
@@ -92,7 +112,20 @@ export function resolveStreamThumbnail(
   bunnyVideoId?: string | null,
   thumbnailUrl?: string | null,
 ): string {
-  if (thumbnailUrl) return thumbnailUrl;
+  const storedThumb = thumbnailUrl?.trim();
+  if (storedThumb) return storedThumb;
   if (bunnyVideoId && cdnHostname) return bunnyThumbnailUrl(bunnyVideoId);
-  return coverImage;
+  return coverImage?.trim() || '';
+}
+
+/** Image source for CDN URLs that require Bunny embed referer headers. */
+export function bunnyImageSource(
+  uri: string | null | undefined,
+): { uri: string; headers?: Record<string, string> } | undefined {
+  const trimmed = uri?.trim();
+  if (!trimmed) return undefined;
+  if (isBunnyCdnUrl(trimmed)) {
+    return { uri: trimmed, headers: bunnyCdnRequestHeaders() };
+  }
+  return { uri: trimmed };
 }

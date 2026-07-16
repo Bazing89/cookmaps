@@ -30,5 +30,9 @@ export function PickupMap(props: PickupMapProps) {
     );
   }
 
-  return <GooglePickupMap {...props} />;
+  return (
+    <View style={{ flex: 1, minHeight: 0 }}>
+      <GooglePickupMap {...props} />
+    </View>
+  );
 }

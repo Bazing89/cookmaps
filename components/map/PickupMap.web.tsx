@@ -74,7 +74,8 @@ export function PickupMap({ chefs, plates, userLocation }: PickupMapProps) {
 
 const styles = StyleSheet.create({
   map: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
+    width: '100%',
     backgroundColor: '#14181C',
   },
   fallback: {

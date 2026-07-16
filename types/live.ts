@@ -1,4 +1,4 @@
-export type TabId = 'live' | 'map' | 'go-live' | 'orders' | 'profile';
+export type TabId = 'live' | 'map' | 'go-live' | 'cart' | 'profile';
 
 export type PostType = 'short' | 'live';
 
@@ -50,6 +50,7 @@ export type PlateOffering = {
   id: string;
   label: string;
   description: string;
+  ingredients?: string;
   price: number;
   quantity?: number | null;
   imageUrl?: string | null;

@@ -69,7 +69,8 @@ export function GooglePickupMap({ chefs, plates, userLocation }: PickupMapProps)
 
 const styles = StyleSheet.create({
   map: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
+    width: '100%',
     backgroundColor: cookTheme.bg,
   },
 });

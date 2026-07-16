@@ -7,6 +7,7 @@ import type { TabId } from '../../types/live';
 type Props = {
   activeTab: TabId;
   onTabChange: (tab: TabId) => void;
+  cartCount?: number;
 };
 
 const TABS: {
@@ -18,11 +19,11 @@ const TABS: {
   { id: 'live', label: 'For You', icon: 'play-outline', activeIcon: 'play' },
   { id: 'map', label: 'Map', icon: 'map-outline', activeIcon: 'map' },
   { id: 'go-live', label: 'Cook', icon: 'radio-outline', activeIcon: 'radio' },
-  { id: 'orders', label: 'Orders', icon: 'bag-handle-outline', activeIcon: 'bag-handle' },
+  { id: 'cart', label: 'Cart', icon: 'cart-outline', activeIcon: 'cart' },
   { id: 'profile', label: 'Profile', icon: 'person-outline', activeIcon: 'person' },
 ];
 
-export function BottomNav({ activeTab, onTabChange }: Props) {
+export function BottomNav({ activeTab, onTabChange, cartCount = 0 }: Props) {
   const insets = useSafeAreaInsets();
 
   return (
@@ -63,11 +64,23 @@ export function BottomNav({ activeTab, onTabChange }: Props) {
               className="min-w-[56px] items-center justify-center py-1"
               hitSlop={6}
             >
-              <Ionicons
-                name={active ? tab.activeIcon : tab.icon}
-                size={22}
-                color={active ? '#fff' : cookTheme.textMuted}
-              />
+              <View>
+                <Ionicons
+                  name={active ? tab.activeIcon : tab.icon}
+                  size={22}
+                  color={active ? '#fff' : cookTheme.textMuted}
+                />
+                {tab.id === 'cart' && cartCount > 0 ? (
+                  <View
+                    className="absolute -right-2 -top-1 min-w-[16px] items-center rounded-full px-1"
+                    style={{ backgroundColor: cookTheme.accent }}
+                  >
+                    <Text className="text-[9px] text-white" style={{ fontFamily: 'DMSans_600SemiBold' }}>
+                      {cartCount > 9 ? '9+' : cartCount}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
               <Text
                 className="mt-0.5 text-[10px]"
                 style={{

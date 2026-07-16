@@ -75,6 +75,35 @@ export type PostPlateRow = {
   created_at: string;
 };
 
+export type CreatorPlate = {
+  id: string;
+  creator_id: string;
+  name: string;
+  ingredients: string;
+  description: string;
+  price: number;
+  image_url: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PostPlateLinkRow = {
+  id: string;
+  post_id: string;
+  creator_plate_id: string;
+  sort_order: number;
+  creator_plates?: CreatorPlate;
+};
+
+export type CreateCreatorPlateInput = {
+  name: string;
+  ingredients: string;
+  description: string;
+  price: number;
+  image_url?: string | null;
+};
+
 export type CreatePlateInput = {
   label: string;
   description?: string;

@@ -24,11 +24,11 @@ import { cookTheme } from '../../theme/cookTheme';
 import type { LiveStream } from '../../types/live';
 
 type Props = {
-  onDonated: (stream: LiveStream, amount: number, plateId?: string, plateLabel?: string) => void;
+  onAddToCart: (stream: LiveStream, plate: import('../../types/live').PlateOffering) => void;
   onOpenCreator: (creatorKey: string, postId?: string) => void;
 };
 
-export function FeedScreen({ onDonated, onOpenCreator }: Props) {
+export function FeedScreen({ onAddToCart, onOpenCreator }: Props) {
   const { profile } = useAuth();
   const { height: windowHeight } = useWindowDimensions();
   const { isDesktop } = useWebLayout();
@@ -174,7 +174,7 @@ export function FeedScreen({ onDonated, onOpenCreator }: Props) {
               onDonate={() => setDonateStream(item)}
               onAsk={() => setCommentStream(item)}
               commentCount={commentCounts[item.id] ?? item.commentCount ?? 0}
-              onSelectPlate={() => setDonateStream(item)}
+              onAddToCart={(plate) => onAddToCart(item, plate)}
               onOpenCreator={(s) => onOpenCreator(creatorKeyForStream(s), s.id)}
               onPrevVideo={isDesktop ? () => goToVideo(index - 1) : undefined}
               onNextVideo={isDesktop ? () => goToVideo(index + 1) : undefined}
@@ -191,12 +191,9 @@ export function FeedScreen({ onDonated, onOpenCreator }: Props) {
         visible={donateStream != null}
         stream={donateStream}
         onClose={() => setDonateStream(null)}
-        onConfirm={(amount, plateId) => {
+        onAddToCart={(plate) => {
           if (!donateStream) return;
-          const plateLabel = plateId
-            ? donateStream.plates?.find((plate) => plate.id === plateId)?.label
-            : donateStream.plates?.find((plate) => plate.price === amount)?.label;
-          onDonated(donateStream, amount, plateId, plateLabel);
+          onAddToCart(donateStream, plate);
           setDonateStream(null);
         }}
       />

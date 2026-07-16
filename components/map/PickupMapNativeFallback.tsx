@@ -61,7 +61,8 @@ export function PickupMapNativeFallback({ chefs, plates, userLocation }: PickupM
 
 const styles = StyleSheet.create({
   root: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
+    width: '100%',
     backgroundColor: '#14181C',
   },
   grid: {

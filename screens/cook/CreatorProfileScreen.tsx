@@ -3,12 +3,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   Modal,
   Pressable,
   Text,
   View,
-  useWindowDimensions,
   type ViewToken,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,6 +14,7 @@ import { LiveFeedCard } from '../../components/cook/LiveFeedCard';
 import { CommentsSheet } from '../../components/cook/CommentsSheet';
 import { CreatorAvatar } from '../../components/cook/CreatorAvatar';
 import { formatCount } from '../../data/lives';
+import { useWebLayout } from '../../hooks/useWebLayout';
 import {
   applyCreatorProfileToStream,
   creatorKeyForStream,
@@ -24,7 +23,7 @@ import {
   fetchPostsByCreator,
 } from '../../lib/creatorPosts';
 import { fetchFeedVideos } from '../../lib/feedVideos';
-import { resolveStreamThumbnail } from '../../lib/bunnyStream';
+import { StreamThumbnailImage } from '../../components/cook/StreamThumbnailImage';
 import { cookTheme } from '../../theme/cookTheme';
 import type { CreatorProfile } from '../../types/creator';
 import type { LiveStream } from '../../types/live';
@@ -83,8 +82,10 @@ function ProfileBackHeader({
 }
 
 export function CreatorProfileScreen({ creatorKey, startPostId, onBack, onDonate }: Props) {
-  const { width, height } = useWindowDimensions();
-  const cellSize = Math.floor((width - 40 - 4) / 3);
+  const { height, profileWidth, isWeb, isDesktop } = useWebLayout();
+  const profilePadding = 40;
+  const gridGap = 2;
+  const cellSize = Math.floor((profileWidth - profilePadding - gridGap * 2) / 3);
   const [profile, setProfile] = useState<CreatorProfile | null>(null);
   const [streams, setStreams] = useState<LiveStream[]>([]);
   const [loading, setLoading] = useState(true);
@@ -158,7 +159,11 @@ export function CreatorProfileScreen({ creatorKey, startPostId, onBack, onDonate
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1" style={{ backgroundColor: cookTheme.bg }} edges={['top', 'left', 'right']}>
+      <SafeAreaView
+        className={`flex-1${isWeb ? ' items-center' : ''}`}
+        style={{ backgroundColor: cookTheme.bg }}
+        edges={['top', 'left', 'right']}
+      >
         <ProfileBackHeader onBack={onBack} />
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color={cookTheme.accent} size="large" />
@@ -171,7 +176,19 @@ export function CreatorProfileScreen({ creatorKey, startPostId, onBack, onDonate
   const handle = profile ? displayHandle(profile) : creatorKey;
 
   return (
-    <SafeAreaView className="flex-1" style={{ backgroundColor: cookTheme.bg }} edges={['top', 'left', 'right']}>
+    <SafeAreaView
+      className={`flex-1${isWeb ? ' items-center' : ''}`}
+      style={{ backgroundColor: cookTheme.bg }}
+      edges={['top', 'left', 'right']}
+    >
+      <View
+        className="flex-1 self-center"
+        style={{
+          width: '100%',
+          maxWidth: profileWidth,
+          ...(isWeb && isDesktop ? { alignSelf: 'center' as const } : undefined),
+        }}
+      >
       <ProfileBackHeader title={handle} onBack={onBack} />
 
       <FlatList
@@ -179,7 +196,12 @@ export function CreatorProfileScreen({ creatorKey, startPostId, onBack, onDonate
         data={displayStreams}
         keyExtractor={(item) => item.id}
         numColumns={3}
-        columnWrapperStyle={{ gap: 2, marginBottom: 2 }}
+        columnWrapperStyle={{
+          gap: gridGap,
+          marginBottom: gridGap,
+          width: cellSize * 3 + gridGap * 2,
+          alignSelf: 'center',
+        }}
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32 }}
         ListHeaderComponent={
           <View className="mb-5 items-center pt-2">
@@ -237,13 +259,12 @@ export function CreatorProfileScreen({ creatorKey, startPostId, onBack, onDonate
           </Text>
         }
         renderItem={({ item, index }) => {
-          const thumb = resolveStreamThumbnail(item.coverImage, item.bunnyVideoId, item.thumbnailUrl);
           return (
             <Pressable
               onPress={() => openVideo(index)}
               style={{ width: cellSize, height: cellSize * 1.35 }}
             >
-              <Image source={{ uri: thumb }} className="h-full w-full" resizeMode="cover" />
+              <StreamThumbnailImage stream={item} className="h-full w-full" />
               {item.isLive ? (
                 <View
                   className="absolute left-1 top-1 rounded px-1.5 py-0.5"
@@ -318,6 +339,7 @@ export function CreatorProfileScreen({ creatorKey, startPostId, onBack, onDonate
         onClose={() => setCommentStream(null)}
         onCommentCountChange={handleCommentCountChange}
       />
+      </View>
     </SafeAreaView>
   );
 }

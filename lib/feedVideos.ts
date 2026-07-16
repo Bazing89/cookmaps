@@ -1,12 +1,6 @@
 import type { LiveStream } from '../types/live';
-import {
-  fetchBunnyLibrary,
-  fetchBunnyVideos,
-  isBunnyApiConfigured,
-  resolveLibraryCdnHostname,
-} from './bunnyApi';
 import { fetchAllCreatorPosts } from './creatorPosts';
-import { resolveStreamVideoUrl, setBunnyCdnHostname } from './bunnyStream';
+import { ensureBunnyCdnHostname, resolveStreamVideoUrl } from './bunnyStream';
 import { geocodeAddress, isGooglePlacesConfigured } from './googlePlaces';
 
 const DEFAULT_COORDS = { latitude: 37.7749, longitude: -122.4194 };
@@ -38,19 +32,6 @@ async function enrichStreamLocation(stream: LiveStream): Promise<LiveStream> {
 
 async function enrichStreamLocations(streams: LiveStream[]): Promise<LiveStream[]> {
   return Promise.all(streams.map(enrichStreamLocation));
-}
-
-async function ensureBunnyCdnHostname(): Promise<void> {
-  if (!isBunnyApiConfigured) return;
-
-  try {
-    const [library, videos] = await Promise.all([fetchBunnyLibrary(), fetchBunnyVideos()]);
-    const cdnHostname = resolveLibraryCdnHostname(library, videos[0]);
-    if (cdnHostname) setBunnyCdnHostname(cdnHostname);
-  } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    console.warn('[feedVideos] Could not resolve Bunny CDN hostname:', message);
-  }
 }
 
 export async function fetchFeedVideos(): Promise<LiveStream[]> {

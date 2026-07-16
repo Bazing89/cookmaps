@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Animated, Image, Pressable, Text, View } from 'react-native';
 import { formatCount } from '../../data/lives';
 import { useWebLayout } from '../../hooks/useWebLayout';
@@ -22,7 +22,7 @@ type Props = {
   onAsk?: () => void;
   commentCount?: number;
   onOpenCreator?: (stream: LiveStream) => void;
-  onSelectPlate?: () => void;
+  onAddToCart?: (plate: import('../../types/live').PlateOffering) => void;
   onPrevVideo?: () => void;
   onNextVideo?: () => void;
   canGoPrev?: boolean;
@@ -270,7 +270,7 @@ export function LiveFeedCard({
   onAsk,
   commentCount,
   onOpenCreator,
-  onSelectPlate,
+  onAddToCart,
   onPrevVideo,
   onNextVideo,
   canGoPrev = false,
@@ -280,6 +280,11 @@ export function LiveFeedCard({
   const { isDesktop, videoHeight, videoWidth } = useWebLayout();
   const pulse = useRef(new Animated.Value(1)).current;
   const videoPlayerRef = useRef<FeedVideoPlayerRef>(null);
+  const [platesDismissed, setPlatesDismissed] = useState(false);
+
+  useEffect(() => {
+    if (isActive) setPlatesDismissed(false);
+  }, [isActive, stream.id]);
 
   useEffect(() => {
     if (!isActive) {
@@ -301,8 +306,12 @@ export function LiveFeedCard({
     stream.bunnyVideoId,
     stream.thumbnailUrl,
   );
+  const handleAddToCart = (plate: import('../../types/live').PlateOffering) => {
+    onAddToCart?.(plate);
+  };
   const hasPlates = Boolean(isActive && stream.plates?.length);
-  const platesBottomInset = hasPlates ? 76 : 0;
+  const showPlates = hasPlates && !platesDismissed;
+  const platesBottomInset = showPlates ? 52 : 0;
 
   if (isDesktop) {
     return (
@@ -342,11 +351,12 @@ export function LiveFeedCard({
               hasUserLocation={hasUserLocation}
               bottomInset={platesBottomInset}
             />
-            {hasPlates && stream.plates ? (
+            {showPlates && stream.plates ? (
               <PlatesBar
                 plates={stream.plates}
                 chefName={stream.chefName}
-                onSelectPlate={() => onSelectPlate?.() ?? onDonate()}
+                onAddToCart={handleAddToCart}
+                onClose={() => setPlatesDismissed(true)}
               />
             ) : null}
           </View>
@@ -403,11 +413,12 @@ export function LiveFeedCard({
         bottomInset={platesBottomInset}
       />
 
-      {hasPlates && stream.plates ? (
+      {showPlates && stream.plates ? (
         <PlatesBar
           plates={stream.plates}
           chefName={stream.chefName}
-          onSelectPlate={() => onSelectPlate?.() ?? onDonate()}
+          onAddToCart={handleAddToCart}
+          onClose={() => setPlatesDismissed(true)}
         />
       ) : null}
     </View>
