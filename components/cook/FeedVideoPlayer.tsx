@@ -24,7 +24,11 @@ export const FeedVideoPlayer = forwardRef<FeedVideoPlayerRef, Props>(function Fe
   ref,
 ) {
   const [userPaused, setUserPaused] = useState(false);
-  const videoSource = locked ? null : resolveStreamVideoSource(stream.bunnyVideoId, stream.hlsUrl, stream.videoUrl);
+  const videoSource = locked
+    ? null
+    : resolveStreamVideoSource(stream.bunnyVideoId, stream.hlsUrl, stream.videoUrl, {
+        preferHls: stream.isLive,
+      });
   const posterSource = isBunnyCdnUrl(posterUri)
     ? { uri: posterUri, headers: bunnyCdnRequestHeaders() }
     : { uri: posterUri };

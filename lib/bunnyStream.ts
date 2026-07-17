@@ -78,14 +78,25 @@ export function resolveStreamVideoSource(
   bunnyVideoId?: string | null,
   hlsUrl?: string | null,
   videoUrl?: string | null,
+  options?: { preferHls?: boolean },
 ): StreamVideoSource | null {
+  const preferHls = options?.preferHls ?? false;
+
+  if (preferHls && hlsUrl) {
+    return {
+      uri: hlsUrl,
+      contentType: hlsUrl.includes('.m3u8') ? 'hls' : 'progressive',
+    };
+  }
+
   if (videoUrl) {
     return {
       uri: videoUrl,
       contentType: videoUrl.includes('.m3u8') ? 'hls' : 'progressive',
     };
   }
-  if (bunnyVideoId && cdnHostname) {
+
+  if (bunnyVideoId && cdnHostname && !preferHls) {
     // MP4 is more reliable on native players when Bunny blocks direct CDN URLs —
     // HLS segment requests may not carry custom headers on iOS.
     return { uri: bunnyMp4Url(bunnyVideoId), contentType: 'progressive' };

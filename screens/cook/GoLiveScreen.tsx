@@ -20,6 +20,12 @@ import {
 } from '../../lib/creatorPosts';
 import { uploadShortToBunny } from '../../lib/bunnyUpload';
 import { isBunnyApiConfigured } from '../../lib/bunnyApi';
+import {
+  bunnyLiveLibraryId,
+  createBunnyLiveStream,
+  isBunnyLiveConfigured,
+  startBunnyLiveStream,
+} from '../../lib/bunnyLive';
 import { supabase } from '../../lib/supabase';
 import { cookTheme } from '../../theme/cookTheme';
 
@@ -27,8 +33,10 @@ type CreatorMode = 'short' | 'live';
 
 type LiveSession = {
   postId: string;
+  bunnyStreamId: string;
   streamKey: string;
   rtmpUrl: string;
+  playbackUrlHls: string;
 };
 
 function Field({
@@ -212,14 +220,29 @@ export function GoLiveScreen() {
       setError('Add a title before going live.');
       return;
     }
+    if (!isBunnyLiveConfigured) {
+      setError(
+        'Bunny Live is not configured. Add EXPO_PUBLIC_BUNNY_STREAM_API_KEY to .env (library 706984), then restart Expo.',
+      );
+      return;
+    }
 
     setBusy(true);
     setError(null);
     setMessage(null);
 
     try {
-      const streamKey = `${user.id.slice(0, 8)}-${Date.now()}`;
-      const rtmpUrl = 'rtmp://live.bunnycdn.com/live';
+      const bunnyLive = await createBunnyLiveStream({
+        title: title.trim(),
+        description: description.trim() || undefined,
+      });
+
+      let activeLive = bunnyLive;
+      try {
+        activeLive = await startBunnyLiveStream(bunnyLive.guid);
+      } catch (startError) {
+        console.warn('[GoLiveScreen] Bunny live start failed, using created stream:', startError);
+      }
 
       const post = await createCreatorPost(user.id, {
         post_type: 'live',
@@ -233,15 +256,25 @@ export function GoLiveScreen() {
         ready_in_minutes: Number(readyInMinutes) || 30,
         is_live: true,
         status: 'live',
-        stream_key: streamKey,
-        rtmp_url: rtmpUrl,
+        bunny_video_id: activeLive.guid,
+        video_url: activeLive.playbackUrlHls,
+        stream_key: activeLive.streamKey,
+        rtmp_url: activeLive.rtmpServer,
         cover_image: profile?.avatar_url ?? undefined,
       });
 
       if (!post) throw new Error('Could not start live session');
 
-      setLiveSession({ postId: post.id, streamKey, rtmpUrl });
-      setMessage('You are live! Viewers can buy tickets to join and watch you cook.');
+      setLiveSession({
+        postId: post.id,
+        bunnyStreamId: activeLive.guid,
+        streamKey: activeLive.streamKey,
+        rtmpUrl: activeLive.rtmpServer,
+        playbackUrlHls: activeLive.playbackUrlHls,
+      });
+      setMessage(
+        'Live stream created on Bunny (library 706984). Connect OBS/Larix, then ticket holders can join from For You.',
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not go live');
     } finally {
@@ -264,7 +297,9 @@ export function GoLiveScreen() {
     if (!user || !liveSession) return;
     setBusy(true);
     try {
-      await endLivePost(liveSession.postId, user.id);
+      await endLivePost(liveSession.postId, user.id, {
+        bunnyLiveStreamId: liveSession.bunnyStreamId,
+      });
       setLiveSession(null);
       setMessage('Live stream ended.');
     } catch (e) {
@@ -406,7 +441,10 @@ export function GoLiveScreen() {
                   </Text>
                 </View>
                 <Text className="text-[12px] text-white/70" style={{ fontFamily: 'DMSans_400Regular' }}>
-                  RTMP URL: {liveSession.rtmpUrl}
+                  Bunny library: {bunnyLiveLibraryId}
+                </Text>
+                <Text className="mt-1 text-[12px] text-white/70" style={{ fontFamily: 'DMSans_400Regular' }}>
+                  RTMP server: {liveSession.rtmpUrl}
                 </Text>
                 <Text className="mt-1 text-[12px] text-white/70" style={{ fontFamily: 'DMSans_400Regular' }}>
                   Stream key: {liveSession.streamKey}
@@ -415,7 +453,8 @@ export function GoLiveScreen() {
                   className="mt-3 text-[12px] leading-5"
                   style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
                 >
-                  Use OBS, Larix, or Bunny Stream mobile encoder with the RTMP URL and stream key above.
+                  In OBS or Larix: paste the RTMP server and stream key above, then start broadcasting. Ticket
+                  holders watch via HLS on For You after you go live.
                 </Text>
               </View>
               <Pressable

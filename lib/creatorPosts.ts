@@ -113,7 +113,10 @@ export function mapPostToLiveStream(
     creatorId: profile.id,
     postType: post.post_type,
     bunnyVideoId: post.bunny_video_id,
-    hlsUrl: null,
+    hlsUrl:
+      post.post_type === 'live' && post.video_url?.includes('.m3u8')
+        ? post.video_url
+        : null,
     videoUrl: post.video_url,
     thumbnailUrl: post.thumbnail_url,
     chefName,
@@ -268,7 +271,20 @@ export async function createPlatesForPost(postId: string, plates: CreatePlateInp
   if (error) throw new Error(error.message);
 }
 
-export async function endLivePost(postId: string, creatorId: string): Promise<void> {
+export async function endLivePost(
+  postId: string,
+  creatorId: string,
+  options?: { bunnyLiveStreamId?: string | null },
+): Promise<void> {
+  if (options?.bunnyLiveStreamId) {
+    try {
+      const { stopBunnyLiveStream } = await import('./bunnyLive');
+      await stopBunnyLiveStream(options.bunnyLiveStreamId);
+    } catch (e) {
+      console.warn('[creatorPosts] Bunny live stop failed:', e);
+    }
+  }
+
   const { error } = await supabase
     .from('creator_posts')
     .update({ is_live: false, status: 'ended' })
