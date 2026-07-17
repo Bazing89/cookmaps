@@ -1,34 +1,33 @@
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { cookTheme } from '../../theme/cookTheme';
-import type { CartItem, ClaimedPlate, OrderStatus } from './types';
+import type { CartItem, PurchasedTicket, TicketStatus } from './types';
 
 type Props = {
   cartItems: CartItem[];
-  orders: ClaimedPlate[];
-  ordersLoading?: boolean;
+  tickets: PurchasedTicket[];
+  ticketsLoading?: boolean;
   checkoutBusy?: boolean;
   view: 'cart' | 'orders';
   onViewChange: (view: 'cart' | 'orders') => void;
   onRemoveFromCart: (cartItemId: string) => void;
   onCheckout: () => void;
+  onJoinLive: (streamId: string) => void;
 };
 
-const STATUS_LABEL: Record<OrderStatus, string> = {
-  confirmed: 'Confirmed',
-  ready: 'Ready for pickup',
-  picked_up: 'Picked up',
+const STATUS_LABEL: Record<TicketStatus, string> = {
+  active: 'Active',
+  expired: 'Expired',
   cancelled: 'Cancelled',
 };
 
-const STATUS_COLOR: Record<OrderStatus, string> = {
-  confirmed: cookTheme.accentSoft,
-  ready: cookTheme.success,
-  picked_up: cookTheme.textMuted,
+const STATUS_COLOR: Record<TicketStatus, string> = {
+  active: cookTheme.success,
+  expired: cookTheme.textMuted,
   cancelled: cookTheme.live,
 };
 
-function formatOrderDate(timestamp: number) {
+function formatPurchaseDate(timestamp: number) {
   return new Date(timestamp).toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -51,15 +50,15 @@ function CartLine({
       style={{ backgroundColor: cookTheme.surface }}
     >
       <View className="flex-row">
-        {item.plateImageUrl ? (
+        {item.ticketImageUrl ? (
           <Image
-            source={{ uri: item.plateImageUrl }}
+            source={{ uri: item.ticketImageUrl }}
             className="h-28 w-24 bg-white/5"
             resizeMode="cover"
           />
         ) : (
           <View className="h-28 w-24 items-center justify-center bg-white/5">
-            <Ionicons name="restaurant-outline" size={28} color={cookTheme.textMuted} />
+            <Ionicons name="ticket-outline" size={28} color={cookTheme.textMuted} />
           </View>
         )}
         <View className="min-w-0 flex-1 justify-center px-3.5 py-3">
@@ -68,14 +67,14 @@ function CartLine({
             style={{ fontFamily: 'Syne_700Bold' }}
             numberOfLines={1}
           >
-            {item.plateLabel}
+            {item.ticketLabel}
           </Text>
           <Text
             className="mt-1 text-[12px]"
             style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
             numberOfLines={1}
           >
-            {item.stream.chefName} · {item.stream.pickupNeighborhood || 'Pickup nearby'}
+            {item.stream.chefName} · {item.stream.dishName}
           </Text>
           <View className="mt-2 flex-row items-center justify-between">
             <Text className="text-[14px] text-white" style={{ fontFamily: 'DMSans_600SemiBold' }}>
@@ -97,22 +96,30 @@ function CartLine({
   );
 }
 
-function OrderLine({ order }: { order: ClaimedPlate }) {
+function TicketLine({
+  ticket,
+  onJoinLive,
+}: {
+  ticket: PurchasedTicket;
+  onJoinLive: () => void;
+}) {
+  const canJoin = ticket.status === 'active' && ticket.stream.isLive;
+
   return (
     <View
       className="mb-3 overflow-hidden rounded-2xl border border-white/10"
       style={{ backgroundColor: cookTheme.surface }}
     >
       <View className="flex-row">
-        {order.plateImageUrl ? (
+        {ticket.ticketImageUrl ? (
           <Image
-            source={{ uri: order.plateImageUrl }}
+            source={{ uri: ticket.ticketImageUrl }}
             className="h-28 w-24 bg-white/5"
             resizeMode="cover"
           />
         ) : (
           <View className="h-28 w-24 items-center justify-center bg-white/5">
-            <Ionicons name="restaurant-outline" size={28} color={cookTheme.textMuted} />
+            <Ionicons name="ticket-outline" size={28} color={cookTheme.textMuted} />
           </View>
         )}
         <View className="flex-1 justify-center px-3.5 py-3">
@@ -122,7 +129,7 @@ function OrderLine({ order }: { order: ClaimedPlate }) {
               style={{ fontFamily: 'Syne_700Bold' }}
               numberOfLines={1}
             >
-              {order.plateLabel}
+              {ticket.ticketLabel}
             </Text>
             <View
               className="rounded-full px-2 py-0.5"
@@ -132,10 +139,10 @@ function OrderLine({ order }: { order: ClaimedPlate }) {
                 className="text-[10px] uppercase tracking-wide"
                 style={{
                   fontFamily: 'DMSans_600SemiBold',
-                  color: STATUS_COLOR[order.status],
+                  color: STATUS_COLOR[ticket.status],
                 }}
               >
-                {STATUS_LABEL[order.status]}
+                {STATUS_LABEL[ticket.status]}
               </Text>
             </View>
           </View>
@@ -144,28 +151,42 @@ function OrderLine({ order }: { order: ClaimedPlate }) {
             style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
             numberOfLines={1}
           >
-            {order.stream.chefName} · {order.stream.dishName}
+            {ticket.stream.chefName} · {ticket.stream.dishName}
           </Text>
-          {order.stream.pickupNeighborhood ? (
-            <Text
-              className="mt-0.5 text-[12px]"
-              style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
-              numberOfLines={1}
-            >
-              Pickup · {order.stream.pickupNeighborhood}
-            </Text>
+          {ticket.stream.isLive ? (
+            <View className="mt-1 flex-row items-center">
+              <View className="mr-1.5 h-1.5 w-1.5 rounded-full" style={{ backgroundColor: cookTheme.live }} />
+              <Text
+                className="text-[12px]"
+                style={{ fontFamily: 'DMSans_500Medium', color: cookTheme.live }}
+              >
+                Live now — join to watch
+              </Text>
+            </View>
           ) : null}
           <View className="mt-2 flex-row items-center justify-between">
             <Text className="text-[13px] text-white" style={{ fontFamily: 'DMSans_600SemiBold' }}>
-              ${order.amount}
+              ${ticket.amount}
             </Text>
             <Text
               className="text-[11px]"
               style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
             >
-              {formatOrderDate(order.claimedAt)}
+              {formatPurchaseDate(ticket.purchasedAt)}
             </Text>
           </View>
+          {canJoin ? (
+            <Pressable
+              onPress={onJoinLive}
+              className="mt-3 flex-row items-center justify-center rounded-xl py-2.5"
+              style={{ backgroundColor: cookTheme.accent }}
+            >
+              <Ionicons name="videocam" size={16} color="#fff" />
+              <Text className="ml-2 text-[14px] text-white" style={{ fontFamily: 'DMSans_600SemiBold' }}>
+                Join live
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
     </View>
@@ -174,13 +195,14 @@ function OrderLine({ order }: { order: ClaimedPlate }) {
 
 export function CartScreen({
   cartItems,
-  orders,
-  ordersLoading,
+  tickets,
+  ticketsLoading,
   checkoutBusy,
   view,
   onViewChange,
   onRemoveFromCart,
   onCheckout,
+  onJoinLive,
 }: Props) {
   const cartTotal = cartItems.reduce((sum, item) => sum + item.amount, 0);
 
@@ -188,15 +210,15 @@ export function CartScreen({
     <View className="flex-1" style={{ backgroundColor: cookTheme.bg }}>
       <View className="px-5 pb-3 pt-4">
         <Text className="text-[28px] text-white" style={{ fontFamily: 'Syne_800ExtraBold' }}>
-          Cart
+          My tickets
         </Text>
         <Text
           className="mt-1 text-[13px]"
           style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
         >
           {view === 'cart'
-            ? 'Review plates before you place your order.'
-            : 'Past plates you ordered from local cooks.'}
+            ? 'Review tickets before checkout — each one unlocks a live cooking stream.'
+            : 'Your tickets — join live streams to watch your food being cooked.'}
         </Text>
 
         <View
@@ -213,7 +235,7 @@ export function CartScreen({
                 style={active ? { backgroundColor: cookTheme.accent } : undefined}
               >
                 <Ionicons
-                  name={tab === 'cart' ? 'cart-outline' : 'receipt-outline'}
+                  name={tab === 'cart' ? 'cart-outline' : 'ticket-outline'}
                   size={16}
                   color="#fff"
                 />
@@ -223,7 +245,7 @@ export function CartScreen({
                     fontFamily: active ? 'DMSans_600SemiBold' : 'DMSans_500Medium',
                   }}
                 >
-                  {tab === 'cart' ? 'Cart' : 'Order history'}
+                  {tab === 'cart' ? 'Cart' : 'My tickets'}
                 </Text>
                 {tab === 'cart' && cartItems.length > 0 ? (
                   <View
@@ -249,15 +271,15 @@ export function CartScreen({
                 className="mt-6 rounded-2xl border border-white/10 px-5 py-8"
                 style={{ backgroundColor: cookTheme.surface }}
               >
-                <Ionicons name="cart-outline" size={32} color={cookTheme.textMuted} />
+                <Ionicons name="ticket-outline" size={32} color={cookTheme.textMuted} />
                 <Text className="mt-3 text-[16px] text-white" style={{ fontFamily: 'Syne_700Bold' }}>
-                  Your cart is empty
+                  No tickets in cart
                 </Text>
                 <Text
                   className="mt-2 text-[13px] leading-5"
                   style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
                 >
-                  Tap Order now on a plate in For You to add it here before checkout.
+                  Tap Buy ticket on a live stream in For You to add a ticket here before checkout.
                 </Text>
               </View>
             ) : (
@@ -281,7 +303,7 @@ export function CartScreen({
                   className="text-[14px] text-white/80"
                   style={{ fontFamily: 'DMSans_500Medium' }}
                 >
-                  Total ({cartItems.length} {cartItems.length === 1 ? 'item' : 'items'})
+                  Total ({cartItems.length} {cartItems.length === 1 ? 'ticket' : 'tickets'})
                 </Text>
                 <Text className="text-[20px] text-white" style={{ fontFamily: 'Syne_800ExtraBold' }}>
                   ${cartTotal.toFixed(cartTotal % 1 === 0 ? 0 : 2)}
@@ -297,9 +319,9 @@ export function CartScreen({
                   <ActivityIndicator color="#fff" />
                 ) : (
                   <>
-                    <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
+                    <Ionicons name="ticket-outline" size={20} color="#fff" />
                     <Text className="ml-2 text-[15px] text-white" style={{ fontFamily: 'DMSans_600SemiBold' }}>
-                      Place order
+                      Buy tickets
                     </Text>
                   </>
                 )}
@@ -307,30 +329,36 @@ export function CartScreen({
             </View>
           ) : null}
         </>
-      ) : ordersLoading ? (
+      ) : ticketsLoading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color={cookTheme.accent} />
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24 }}>
-          {orders.length === 0 ? (
+          {tickets.length === 0 ? (
             <View
               className="mt-6 rounded-2xl border border-white/10 px-5 py-8"
               style={{ backgroundColor: cookTheme.surface }}
             >
-              <Ionicons name="receipt-outline" size={32} color={cookTheme.textMuted} />
+              <Ionicons name="ticket-outline" size={32} color={cookTheme.textMuted} />
               <Text className="mt-3 text-[16px] text-white" style={{ fontFamily: 'Syne_700Bold' }}>
-                No orders yet
+                No tickets yet
               </Text>
               <Text
                 className="mt-2 text-[13px] leading-5"
                 style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
               >
-                After you place an order from your cart, it will show up here with pickup status.
+                Buy a ticket from a live cook, then come back here to join the stream and watch your food being made.
               </Text>
             </View>
           ) : (
-            orders.map((order) => <OrderLine key={order.id} order={order} />)
+            tickets.map((ticket) => (
+              <TicketLine
+                key={ticket.id}
+                ticket={ticket}
+                onJoinLive={() => onJoinLive(ticket.stream.id)}
+              />
+            ))
           )}
         </ScrollView>
       )}

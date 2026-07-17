@@ -1,10 +1,13 @@
 import type { DonationTier, LiveStream } from '../types/live';
 
-export const DONATION_TIERS: DonationTier[] = [
-  { id: 'taste', label: 'Taste', amount: 8, perks: 'Small plate · pickup tonight' },
-  { id: 'plate', label: 'Plate', amount: 18, perks: 'Full portion · priority pickup' },
-  { id: 'feast', label: 'Feast', amount: 35, perks: 'Chef’s cut · skip the line' },
+export const TICKET_TIERS: DonationTier[] = [
+  { id: 'watch', label: 'Watch live', amount: 8, perks: 'Join the stream and watch your dish being cooked' },
+  { id: 'vip', label: 'VIP seat', amount: 18, perks: 'Live access + ask the chef questions in chat' },
+  { id: 'kitchen', label: 'Kitchen pass', amount: 35, perks: 'Front-row live view + recipe notes after the stream' },
 ];
+
+/** @deprecated Use TICKET_TIERS */
+export const DONATION_TIERS = TICKET_TIERS;
 
 export const LIVE_STREAMS: LiveStream[] = [
   {

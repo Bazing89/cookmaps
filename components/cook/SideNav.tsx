@@ -17,7 +17,7 @@ const NAV_ITEMS: {
   { id: 'live', label: 'For You', icon: 'home-outline', activeIcon: 'home' },
   { id: 'map', label: 'Map', icon: 'map-outline', activeIcon: 'map' },
   { id: 'go-live', label: 'Cook', icon: 'add-circle-outline', activeIcon: 'add-circle' },
-  { id: 'cart', label: 'Cart', icon: 'cart-outline', activeIcon: 'cart' },
+  { id: 'cart', label: 'Tickets', icon: 'ticket-outline', activeIcon: 'ticket' },
   { id: 'profile', label: 'Profile', icon: 'person-outline', activeIcon: 'person' },
 ];
 

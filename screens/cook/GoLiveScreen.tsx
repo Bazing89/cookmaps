@@ -18,12 +18,9 @@ import {
   displayHandle,
   endLivePost,
 } from '../../lib/creatorPosts';
-import { PlatePickerSection } from '../../components/cook/PlatePickerSection';
 import { uploadShortToBunny } from '../../lib/bunnyUpload';
 import { isBunnyApiConfigured } from '../../lib/bunnyApi';
-import { linkPlatesToPost } from '../../lib/plates';
 import { supabase } from '../../lib/supabase';
-import { CreatePlateScreen } from './CreatePlateScreen';
 import { cookTheme } from '../../theme/cookTheme';
 
 type CreatorMode = 'short' | 'live';
@@ -94,9 +91,6 @@ export function GoLiveScreen() {
   const [minDonation, setMinDonation] = useState('8');
   const [donationGoal, setDonationGoal] = useState('100');
   const [readyInMinutes, setReadyInMinutes] = useState('30');
-  const [selectedPlateIds, setSelectedPlateIds] = useState<string[]>([]);
-  const [createPlateOpen, setCreatePlateOpen] = useState(false);
-  const [plateCatalogRefreshKey, setPlateCatalogRefreshKey] = useState(0);
 
   const pickVideo = useCallback(async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -188,15 +182,10 @@ export function GoLiveScreen() {
 
       if (updateError) throw new Error(updateError.message);
 
-      if (selectedPlateIds.length) {
-        await linkPlatesToPost(post.id, selectedPlateIds);
-      }
-
       setMessage('Short uploaded to Bunny! It may take a minute to process, then check For You and your profile.');
       setVideoUri(null);
       setTitle('');
       setDescription('');
-      setSelectedPlateIds([]);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
@@ -215,7 +204,6 @@ export function GoLiveScreen() {
     pickupNeighborhood,
     readyInMinutes,
     profile?.avatar_url,
-    selectedPlateIds,
   ]);
 
   const startLive = useCallback(async () => {
@@ -252,12 +240,8 @@ export function GoLiveScreen() {
 
       if (!post) throw new Error('Could not start live session');
 
-      if (selectedPlateIds.length) {
-        await linkPlatesToPost(post.id, selectedPlateIds);
-      }
-
       setLiveSession({ postId: post.id, streamKey, rtmpUrl });
-      setMessage('You are live! Neighbors can find you on For You.');
+      setMessage('You are live! Viewers can buy tickets to join and watch you cook.');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not go live');
     } finally {
@@ -274,7 +258,6 @@ export function GoLiveScreen() {
     pickupNeighborhood,
     readyInMinutes,
     profile?.avatar_url,
-    selectedPlateIds,
   ]);
 
   const stopLive = useCallback(async () => {
@@ -309,7 +292,7 @@ export function GoLiveScreen() {
           className="mt-1 text-[14px]"
           style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
         >
-          Post a short or go live from your kitchen.
+          Post a short or go live — sell tickets so viewers can watch you cook.
         </Text>
 
         <View
@@ -319,18 +302,16 @@ export function GoLiveScreen() {
           <Pressable
             onPress={() => {
               setMode('short');
-              setCreatePlateOpen(false);
               setError(null);
-              setSelectedPlateIds([]);
             }}
             className="flex-1 flex-row items-center justify-center rounded-full py-2.5"
-            style={mode === 'short' && !createPlateOpen ? { backgroundColor: cookTheme.accent } : undefined}
+            style={mode === 'short' ? { backgroundColor: cookTheme.accent } : undefined}
           >
             <Ionicons name="film-outline" size={16} color="#fff" />
             <Text
               className="ml-1.5 text-[13px] text-white"
               style={{
-                fontFamily: mode === 'short' && !createPlateOpen ? 'DMSans_600SemiBold' : 'DMSans_500Medium',
+                fontFamily: mode === 'short' ? 'DMSans_600SemiBold' : 'DMSans_500Medium',
               }}
             >
               Post short
@@ -339,40 +320,18 @@ export function GoLiveScreen() {
 
           <Pressable
             onPress={() => {
-              setCreatePlateOpen(true);
-              setError(null);
-            }}
-            className="flex-1 flex-row items-center justify-center rounded-full py-2.5"
-            style={createPlateOpen ? { backgroundColor: cookTheme.accent } : undefined}
-            accessibilityLabel="Create plate"
-          >
-            <Ionicons name="restaurant-outline" size={16} color="#fff" />
-            <Text
-              className="ml-1.5 text-[13px] text-white"
-              style={{
-                fontFamily: createPlateOpen ? 'DMSans_600SemiBold' : 'DMSans_500Medium',
-              }}
-            >
-              Create plate
-            </Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => {
               setMode('live');
-              setCreatePlateOpen(false);
               setError(null);
-              setSelectedPlateIds([]);
               setVideoUri(null);
             }}
             className="flex-1 flex-row items-center justify-center rounded-full py-2.5"
-            style={mode === 'live' && !createPlateOpen ? { backgroundColor: cookTheme.accent } : undefined}
+            style={mode === 'live' ? { backgroundColor: cookTheme.accent } : undefined}
           >
             <Ionicons name="radio-outline" size={16} color="#fff" />
             <Text
               className="ml-1.5 text-[13px] text-white"
               style={{
-                fontFamily: mode === 'live' && !createPlateOpen ? 'DMSans_600SemiBold' : 'DMSans_500Medium',
+                fontFamily: mode === 'live' ? 'DMSans_600SemiBold' : 'DMSans_500Medium',
               }}
             >
               Go live
@@ -415,15 +374,6 @@ export function GoLiveScreen() {
                 onChangeText={setTitle}
                 placeholder="Chili crisp noodles"
               />
-
-              {user ? (
-                <PlatePickerSection
-                  creatorId={user.id}
-                  selectedIds={selectedPlateIds}
-                  onChangeSelected={setSelectedPlateIds}
-                  refreshKey={plateCatalogRefreshKey}
-                />
-              ) : null}
 
               <Pressable
                 onPress={() => void publishShort()}
@@ -492,14 +442,21 @@ export function GoLiveScreen() {
                 placeholder="What's cooking tonight?"
               />
 
-              {user ? (
-                <PlatePickerSection
-                  creatorId={user.id}
-                  selectedIds={selectedPlateIds}
-                  onChangeSelected={setSelectedPlateIds}
-                  refreshKey={plateCatalogRefreshKey}
-                />
-              ) : null}
+              <Field
+                label="Ticket price ($)"
+                value={minDonation}
+                onChangeText={setMinDonation}
+                placeholder="8"
+                keyboardType="numeric"
+              />
+
+              <Field
+                label="Description (optional)"
+                value={description}
+                onChangeText={setDescription}
+                placeholder="What are you cooking live?"
+                multiline
+              />
 
               <Pressable
                 onPress={() => void startLive()}
@@ -539,15 +496,6 @@ export function GoLiveScreen() {
           ) : null}
         </View>
       </ScrollView>
-
-      {createPlateOpen ? (
-        <View className="absolute inset-0 z-50">
-          <CreatePlateScreen
-            onBack={() => setCreatePlateOpen(false)}
-            onCreated={() => setPlateCatalogRefreshKey((k) => k + 1)}
-          />
-        </View>
-      ) : null}
     </KeyboardAvoidingView>
   );
 }

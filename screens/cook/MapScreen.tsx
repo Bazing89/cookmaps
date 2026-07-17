@@ -2,24 +2,24 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { DonateSheet } from '../../components/cook/DonateSheet';
-import { NearbyPlateCard } from '../../components/cook/NearbyPlateCard';
+import { TicketSheet } from '../../components/cook/DonateSheet';
+import { NearbyLiveCard } from '../../components/cook/NearbyPlateCard';
 import { PickupMap } from '../../components/map/PickupMap';
 import { useFeedVideos } from '../../hooks/useFeedVideos';
 import { useUserLocation } from '../../hooks/useUserLocation';
 import { useWebLayout } from '../../hooks/useWebLayout';
 import { applyStreamDistances, sortStreamsByDistance } from '../../lib/geo';
-import { plateListingsFromStreams } from '../../lib/plates';
+import { liveListingsFromStreams } from '../../lib/tickets';
 import { cookTheme } from '../../theme/cookTheme';
-import type { LiveStream } from '../../types/live';
-import type { ClaimedPlate } from './types';
+import type { LiveStream, TicketOffering } from '../../types/live';
+import type { PurchasedTicket } from './types';
 
 type Props = {
-  plates: ClaimedPlate[];
-  onAddToCart: (stream: LiveStream, plate: import('../../types/live').PlateOffering) => void;
+  tickets: PurchasedTicket[];
+  onAddTicket: (stream: LiveStream, ticket: TicketOffering) => void;
 };
 
-export function MapScreen({ plates, onAddToCart }: Props) {
+export function MapScreen({ tickets, onAddTicket }: Props) {
   const { location: userLocation } = useUserLocation();
   const { streams, loading } = useFeedVideos();
   const { isDesktop, height: windowHeight } = useWebLayout();
@@ -31,25 +31,24 @@ export function MapScreen({ plates, onAddToCart }: Props) {
   const paneStyle = isDesktop
     ? ({ flex: 1, minHeight: 0 } as const)
     : ({ height: paneHeight, minHeight: 0 } as const);
-  const [claimStream, setClaimStream] = useState<LiveStream | null>(null);
+  const [ticketStream, setTicketStream] = useState<LiveStream | null>(null);
 
   const chefs = useMemo(
     () => sortStreamsByDistance(applyStreamDistances(streams, userLocation)),
     [streams, userLocation],
   );
 
-  const nearbyPlates = useMemo(() => plateListingsFromStreams(chefs), [chefs]);
+  const liveNearYou = useMemo(() => liveListingsFromStreams(chefs), [chefs]);
   const hasUserLocation = userLocation != null;
 
   return (
     <View className="flex-1" style={{ backgroundColor: cookTheme.bg }}>
-      {/* Top half — map */}
       <View className="relative overflow-hidden" style={paneStyle}>
-        <PickupMap chefs={chefs} plates={plates} userLocation={userLocation} />
+        <PickupMap chefs={chefs} plates={tickets} userLocation={userLocation} />
 
         <View className="pointer-events-none absolute left-4 top-3 right-4">
           <Text className="text-[22px] text-white" style={{ fontFamily: 'Syne_800ExtraBold' }}>
-            Pickup map
+            Live map
           </Text>
           <Text
             className="mt-0.5 text-[12px]"
@@ -61,26 +60,25 @@ export function MapScreen({ plates, onAddToCart }: Props) {
               textShadowRadius: 4,
             }}
           >
-            Chefs and kitchens near you
+            Cooks streaming live near you
           </Text>
         </View>
 
         {chefs.length === 0 && !loading ? (
           <View className="pointer-events-none absolute inset-0 items-center justify-center px-8">
             <Text className="text-center text-[15px] text-white" style={{ fontFamily: 'Syne_700Bold' }}>
-              No chefs on the map yet
+              No live cooks on the map yet
             </Text>
             <Text
               className="mt-2 text-center text-[12px] leading-5"
               style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
             >
-              When cooks go live or post shorts with pickup locations, they will appear here.
+              When cooks go live, they will appear here. Buy a ticket to join their stream.
             </Text>
           </View>
         ) : null}
       </View>
 
-      {/* Bottom half — plates for sale */}
       <View
         className="border-t border-white/10"
         style={{ ...paneStyle, backgroundColor: cookTheme.bg }}
@@ -88,19 +86,19 @@ export function MapScreen({ plates, onAddToCart }: Props) {
         <View className="flex-row items-end justify-between px-4 pb-2 pt-3">
           <View className="flex-1 pr-3">
             <Text className="text-[20px] text-white" style={{ fontFamily: 'Syne_800ExtraBold' }}>
-              Plates near you
+              Live near you
             </Text>
             <Text
               className="mt-0.5 text-[12px]"
               style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
             >
-              Home-cooked plates available for pickup in your area
+              Buy a ticket to watch these cooks live
             </Text>
           </View>
-          {nearbyPlates.length > 0 ? (
+          {liveNearYou.length > 0 ? (
             <View className="rounded-full px-2.5 py-1" style={{ backgroundColor: cookTheme.surfaceElevated }}>
               <Text className="text-[12px] text-white" style={{ fontFamily: 'DMSans_600SemiBold' }}>
-                {nearbyPlates.length}
+                {liveNearYou.length}
               </Text>
             </View>
           ) : null}
@@ -116,33 +114,33 @@ export function MapScreen({ plates, onAddToCart }: Props) {
             contentContainerStyle={{
               paddingHorizontal: 16,
               paddingBottom: bottomNavInset + 12,
-              flexGrow: nearbyPlates.length === 0 ? 1 : undefined,
+              flexGrow: liveNearYou.length === 0 ? 1 : undefined,
             }}
             showsVerticalScrollIndicator={false}
           >
-            {nearbyPlates.length === 0 ? (
+            {liveNearYou.length === 0 ? (
               <View className="flex-1 items-center justify-center px-6 py-8">
-                <Ionicons name="restaurant-outline" size={36} color={cookTheme.textMuted} />
+                <Ionicons name="videocam-outline" size={36} color={cookTheme.textMuted} />
                 <Text
                   className="mt-3 text-center text-[15px] text-white"
                   style={{ fontFamily: 'DMSans_500Medium' }}
                 >
-                  No plates listed yet
+                  No live streams right now
                 </Text>
                 <Text
                   className="mt-1 text-center text-[13px] leading-5"
                   style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
                 >
-                  Cooks add plates when they post shorts or go live. Check back soon or browse For You.
+                  Check For You for upcoming cooks, or come back when someone goes live.
                 </Text>
               </View>
             ) : (
-              nearbyPlates.map((listing) => (
-                <NearbyPlateCard
-                  key={listing.plateId}
+              liveNearYou.map((listing) => (
+                <NearbyLiveCard
+                  key={listing.ticketId}
                   listing={listing}
                   hasUserLocation={hasUserLocation}
-                  onPress={() => setClaimStream(listing.stream)}
+                  onPress={() => setTicketStream(listing.stream)}
                 />
               ))
             )}
@@ -150,14 +148,14 @@ export function MapScreen({ plates, onAddToCart }: Props) {
         )}
       </View>
 
-      <DonateSheet
-        visible={claimStream != null}
-        stream={claimStream}
-        onClose={() => setClaimStream(null)}
-        onAddToCart={(plate) => {
-          if (!claimStream) return;
-          onAddToCart(claimStream, plate);
-          setClaimStream(null);
+      <TicketSheet
+        visible={ticketStream != null}
+        stream={ticketStream}
+        onClose={() => setTicketStream(null)}
+        onAddTicket={(ticket) => {
+          if (!ticketStream) return;
+          onAddTicket(ticketStream, ticket);
+          setTicketStream(null);
         }}
       />
     </View>

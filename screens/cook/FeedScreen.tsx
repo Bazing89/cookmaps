@@ -12,7 +12,7 @@ import {
   type ViewToken,
 } from 'react-native';
 import { CommentsSheet } from '../../components/cook/CommentsSheet';
-import { DonateSheet } from '../../components/cook/DonateSheet';
+import { TicketSheet } from '../../components/cook/DonateSheet';
 import { LiveFeedCard } from '../../components/cook/LiveFeedCard';
 import { useAuth } from '../../hooks/useAuth';
 import { useFeedVideos } from '../../hooks/useFeedVideos';
@@ -21,14 +21,26 @@ import { useWebLayout } from '../../hooks/useWebLayout';
 import { applyCreatorProfileToStream, creatorKeyForStream } from '../../lib/creatorPosts';
 import { applyStreamDistances, sortStreamsByDistance } from '../../lib/geo';
 import { cookTheme } from '../../theme/cookTheme';
-import type { LiveStream } from '../../types/live';
+import type { LiveStream, TicketOffering } from '../../types/live';
+import type { PurchasedTicket } from './types';
 
 type Props = {
-  onAddToCart: (stream: LiveStream, plate: import('../../types/live').PlateOffering) => void;
+  onAddTicket: (stream: LiveStream, ticket: TicketOffering) => void;
   onOpenCreator: (creatorKey: string, postId?: string) => void;
+  purchasedTickets: PurchasedTicket[];
+  viewerId?: string | null;
+  focusStreamId?: string | null;
+  onFocusStreamHandled?: () => void;
 };
 
-export function FeedScreen({ onAddToCart, onOpenCreator }: Props) {
+export function FeedScreen({
+  onAddTicket,
+  onOpenCreator,
+  purchasedTickets,
+  viewerId,
+  focusStreamId,
+  onFocusStreamHandled,
+}: Props) {
   const { profile } = useAuth();
   const { height: windowHeight } = useWindowDimensions();
   const { isDesktop } = useWebLayout();
@@ -49,11 +61,21 @@ export function FeedScreen({ onAddToCart, onOpenCreator }: Props) {
   }, [profile?.avatar_url, profile?.display_name, profile?.handle, refresh]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
-  const [donateStream, setDonateStream] = useState<LiveStream | null>(null);
+  const [ticketStream, setTicketStream] = useState<LiveStream | null>(null);
   const [commentStream, setCommentStream] = useState<LiveStream | null>(null);
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   const [feedHeight, setFeedHeight] = useState(windowHeight);
   const listRef = useRef<FlatList<LiveStream>>(null);
+
+  useEffect(() => {
+    if (!focusStreamId || !displayStreams.length) return;
+    const index = displayStreams.findIndex((stream) => stream.id === focusStreamId);
+    if (index >= 0) {
+      listRef.current?.scrollToIndex({ index, animated: true });
+      setActiveIndex(index);
+    }
+    onFocusStreamHandled?.();
+  }, [displayStreams, focusStreamId, onFocusStreamHandled]);
 
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     const first = viewableItems[0];
@@ -105,7 +127,7 @@ export function FeedScreen({ onAddToCart, onOpenCreator }: Props) {
           style={{ backgroundColor: cookTheme.surface }}
         >
           <Text className="text-[12px] text-white" style={{ fontFamily: 'DMSans_500Medium' }}>
-            Enable location to sort chefs by distance and show your position on the map.
+            Enable location to sort live cooks by distance and show your position on the map.
           </Text>
           <Text
             className="mt-1 text-[11px]"
@@ -171,10 +193,12 @@ export function FeedScreen({ onAddToCart, onOpenCreator }: Props) {
               isActive={index === activeIndex}
               liked={likedIds.has(item.id)}
               onToggleLike={() => toggleLike(item.id)}
-              onDonate={() => setDonateStream(item)}
+              onBuyTicket={() => setTicketStream(item)}
               onAsk={() => setCommentStream(item)}
               commentCount={commentCounts[item.id] ?? item.commentCount ?? 0}
-              onAddToCart={(plate) => onAddToCart(item, plate)}
+              onAddTicket={(ticket) => onAddTicket(item, ticket)}
+              purchasedTickets={purchasedTickets}
+              viewerId={viewerId}
               onOpenCreator={(s) => onOpenCreator(creatorKeyForStream(s), s.id)}
               onPrevVideo={isDesktop ? () => goToVideo(index - 1) : undefined}
               onNextVideo={isDesktop ? () => goToVideo(index + 1) : undefined}
@@ -187,14 +211,14 @@ export function FeedScreen({ onAddToCart, onOpenCreator }: Props) {
       />
       )}
 
-      <DonateSheet
-        visible={donateStream != null}
-        stream={donateStream}
-        onClose={() => setDonateStream(null)}
-        onAddToCart={(plate) => {
-          if (!donateStream) return;
-          onAddToCart(donateStream, plate);
-          setDonateStream(null);
+      <TicketSheet
+        visible={ticketStream != null}
+        stream={ticketStream}
+        onClose={() => setTicketStream(null)}
+        onAddTicket={(ticket) => {
+          if (!ticketStream) return;
+          onAddTicket(ticketStream, ticket);
+          setTicketStream(null);
         }}
       />
 

@@ -19,7 +19,7 @@ const TABS: {
   { id: 'live', label: 'For You', icon: 'play-outline', activeIcon: 'play' },
   { id: 'map', label: 'Map', icon: 'map-outline', activeIcon: 'map' },
   { id: 'go-live', label: 'Cook', icon: 'radio-outline', activeIcon: 'radio' },
-  { id: 'cart', label: 'Cart', icon: 'cart-outline', activeIcon: 'cart' },
+  { id: 'cart', label: 'Tickets', icon: 'ticket-outline', activeIcon: 'ticket' },
   { id: 'profile', label: 'Profile', icon: 'person-outline', activeIcon: 'person' },
 ];
 

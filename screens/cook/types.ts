@@ -1,23 +1,29 @@
 import type { LiveStream } from '../../types/live';
 
-export type OrderStatus = 'confirmed' | 'ready' | 'picked_up' | 'cancelled';
+export type TicketStatus = 'active' | 'expired' | 'cancelled';
 
 export type CartItem = {
   id: string;
   stream: LiveStream;
-  plateId: string;
-  plateLabel: string;
-  plateImageUrl?: string | null;
+  ticketId: string;
+  ticketLabel: string;
+  ticketImageUrl?: string | null;
   amount: number;
 };
 
-export type ClaimedPlate = {
+export type PurchasedTicket = {
   id: string;
   stream: LiveStream;
   amount: number;
-  claimedAt: number;
-  plateId?: string;
-  plateLabel: string;
-  plateImageUrl?: string | null;
-  status: OrderStatus;
+  purchasedAt: number;
+  ticketId?: string;
+  ticketLabel: string;
+  ticketImageUrl?: string | null;
+  status: TicketStatus;
 };
+
+/** @deprecated Use PurchasedTicket */
+export type ClaimedPlate = PurchasedTicket;
+
+/** @deprecated Use TicketStatus */
+export type OrderStatus = TicketStatus;

@@ -6,11 +6,13 @@ import { formatCount } from '../../data/lives';
 import { useWebLayout } from '../../hooks/useWebLayout';
 import { formatDistanceLabel } from '../../lib/geo';
 import { resolveStreamThumbnail } from '../../lib/bunnyStream';
+import { streamRequiresTicket, ticketsForStream, userHasStreamAccess } from '../../lib/tickets';
 import { cookTheme } from '../../theme/cookTheme';
-import type { LiveStream } from '../../types/live';
+import type { LiveStream, TicketOffering } from '../../types/live';
 import { FeedVideoPlayer, type FeedVideoPlayerRef } from './FeedVideoPlayer';
 import { CreatorAvatar } from './CreatorAvatar';
-import { PlatesBar } from './PlatesBar';
+import { TicketBar } from './PlatesBar';
+import type { PurchasedTicket } from '../../screens/cook/types';
 
 type Props = {
   stream: LiveStream;
@@ -18,11 +20,13 @@ type Props = {
   isActive: boolean;
   liked: boolean;
   onToggleLike: () => void;
-  onDonate: () => void;
+  onBuyTicket: () => void;
   onAsk?: () => void;
   commentCount?: number;
   onOpenCreator?: (stream: LiveStream) => void;
-  onAddToCart?: (plate: import('../../types/live').PlateOffering) => void;
+  onAddTicket?: (ticket: TicketOffering) => void;
+  purchasedTickets?: PurchasedTicket[];
+  viewerId?: string | null;
   onPrevVideo?: () => void;
   onNextVideo?: () => void;
   canGoPrev?: boolean;
@@ -82,7 +86,7 @@ function ActionButton({
 function CaptionBlock({
   stream,
   pulse,
-  onDonate,
+  onBuyTicket,
   onOpenCreator,
   overlay = true,
   hasUserLocation = false,
@@ -90,7 +94,7 @@ function CaptionBlock({
 }: {
   stream: LiveStream;
   pulse: Animated.Value;
-  onDonate: () => void;
+  onBuyTicket: () => void;
   onOpenCreator?: (stream: LiveStream) => void;
   overlay?: boolean;
   hasUserLocation?: boolean;
@@ -157,8 +161,8 @@ function CaptionBlock({
         {caption}
       </Text>
 
-      <Pressable onPress={onDonate} className="mt-2 flex-row items-center self-start">
-        <Ionicons name="location-outline" size={13} color="#fff" />
+      <Pressable onPress={onBuyTicket} className="mt-2 flex-row items-center self-start">
+        <Ionicons name="ticket-outline" size={13} color="#fff" />
         <Text
           className="ml-1 text-[12px] text-white/90"
           style={{
@@ -173,7 +177,9 @@ function CaptionBlock({
           }}
           numberOfLines={1}
         >
-          {stream.pickupNeighborhood} · {formatDistanceLabel(stream.distanceMiles, hasUserLocation)} · claim ${stream.minDonation}+
+          {stream.isLive
+            ? `Live now · ticket $${stream.ticketPrice ?? stream.minDonation}`
+            : `${stream.pickupNeighborhood || 'Nearby'} · ${formatDistanceLabel(stream.distanceMiles, hasUserLocation)}`}
         </Text>
       </Pressable>
     </View>
@@ -184,7 +190,7 @@ function ActionRail({
   stream,
   liked,
   onToggleLike,
-  onDonate,
+  onBuyTicket,
   onAsk,
   commentCount = 0,
   onOpenCreator,
@@ -193,7 +199,7 @@ function ActionRail({
   stream: LiveStream;
   liked: boolean;
   onToggleLike: () => void;
-  onDonate: () => void;
+  onBuyTicket: () => void;
   onAsk?: () => void;
   commentCount?: number;
   onOpenCreator?: (stream: LiveStream) => void;
@@ -221,13 +227,13 @@ function ActionRail({
       <ActionButton
         icon="chatbubble-ellipses-outline"
         label={commentCount > 0 ? formatCount(commentCount) : 'Ask'}
-        onPress={onAsk ?? onDonate}
+        onPress={onAsk ?? onBuyTicket}
         webDesktop={webDesktop}
       />
       <ActionButton
-        icon="restaurant-outline"
-        label={`$${stream.minDonation}`}
-        onPress={onDonate}
+        icon="ticket-outline"
+        label={`$${stream.ticketPrice ?? stream.minDonation}`}
+        onPress={onBuyTicket}
         tint="#fff"
         webDesktop={webDesktop}
       />
@@ -266,11 +272,13 @@ export function LiveFeedCard({
   isActive,
   liked,
   onToggleLike,
-  onDonate,
+  onBuyTicket,
   onAsk,
   commentCount,
   onOpenCreator,
-  onAddToCart,
+  onAddTicket,
+  purchasedTickets = [],
+  viewerId,
   onPrevVideo,
   onNextVideo,
   canGoPrev = false,
@@ -280,10 +288,13 @@ export function LiveFeedCard({
   const { isDesktop, videoHeight, videoWidth } = useWebLayout();
   const pulse = useRef(new Animated.Value(1)).current;
   const videoPlayerRef = useRef<FeedVideoPlayerRef>(null);
-  const [platesDismissed, setPlatesDismissed] = useState(false);
+  const [ticketsDismissed, setTicketsDismissed] = useState(false);
+  const hasAccess = userHasStreamAccess(stream, purchasedTickets, viewerId);
+  const locked = streamRequiresTicket(stream) && !hasAccess;
+  const streamTickets = ticketsForStream(stream);
 
   useEffect(() => {
-    if (isActive) setPlatesDismissed(false);
+    if (isActive) setTicketsDismissed(false);
   }, [isActive, stream.id]);
 
   useEffect(() => {
@@ -306,12 +317,12 @@ export function LiveFeedCard({
     stream.bunnyVideoId,
     stream.thumbnailUrl,
   );
-  const handleAddToCart = (plate: import('../../types/live').PlateOffering) => {
-    onAddToCart?.(plate);
+  const handleAddTicket = (ticket: TicketOffering) => {
+    onAddTicket?.(ticket);
   };
-  const hasPlates = Boolean(isActive && stream.plates?.length);
-  const showPlates = hasPlates && !platesDismissed;
-  const platesBottomInset = showPlates ? 52 : 0;
+  const showTicketBar =
+    Boolean(isActive && streamTickets.length && stream.isLive && !hasAccess);
+  const ticketBottomInset = showTicketBar && !ticketsDismissed ? 52 : 0;
 
   if (isDesktop) {
     return (
@@ -331,7 +342,14 @@ export function LiveFeedCard({
               backgroundColor: '#000',
             }}
           >
-            <FeedVideoPlayer ref={videoPlayerRef} stream={stream} isActive={isActive} posterUri={posterUri} />
+            <FeedVideoPlayer
+              ref={videoPlayerRef}
+              stream={stream}
+              isActive={isActive}
+              posterUri={posterUri}
+              locked={locked}
+              onBuyTicket={onBuyTicket}
+            />
             <Pressable
               style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 1 }}
               onPress={() => videoPlayerRef.current?.togglePlayback()}
@@ -345,18 +363,18 @@ export function LiveFeedCard({
             <CaptionBlock
               stream={stream}
               pulse={pulse}
-              onDonate={onDonate}
+              onBuyTicket={onBuyTicket}
               onOpenCreator={onOpenCreator}
               overlay={false}
               hasUserLocation={hasUserLocation}
-              bottomInset={platesBottomInset}
+              bottomInset={ticketBottomInset}
             />
-            {showPlates && stream.plates ? (
-              <PlatesBar
-                plates={stream.plates}
+            {showTicketBar && !ticketsDismissed ? (
+              <TicketBar
+                tickets={streamTickets}
                 chefName={stream.chefName}
-                onAddToCart={handleAddToCart}
-                onClose={() => setPlatesDismissed(true)}
+                onAddTicket={handleAddTicket}
+                onClose={() => setTicketsDismissed(true)}
               />
             ) : null}
           </View>
@@ -365,7 +383,7 @@ export function LiveFeedCard({
             stream={stream}
             liked={liked}
             onToggleLike={onToggleLike}
-            onDonate={onDonate}
+            onBuyTicket={onBuyTicket}
             onAsk={onAsk}
             commentCount={commentCount}
             onOpenCreator={onOpenCreator}
@@ -380,7 +398,14 @@ export function LiveFeedCard({
 
   return (
     <View style={{ height, backgroundColor: cookTheme.bg }} className="w-full overflow-hidden">
-      <FeedVideoPlayer ref={videoPlayerRef} stream={stream} isActive={isActive} posterUri={posterUri} />
+      <FeedVideoPlayer
+        ref={videoPlayerRef}
+        stream={stream}
+        isActive={isActive}
+        posterUri={posterUri}
+        locked={locked}
+        onBuyTicket={onBuyTicket}
+      />
 
       <Pressable
         style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 1 }}
@@ -398,7 +423,7 @@ export function LiveFeedCard({
         stream={stream}
         liked={liked}
         onToggleLike={onToggleLike}
-        onDonate={onDonate}
+        onBuyTicket={onBuyTicket}
         onAsk={onAsk}
         commentCount={commentCount}
         onOpenCreator={onOpenCreator}
@@ -407,18 +432,18 @@ export function LiveFeedCard({
       <CaptionBlock
         stream={stream}
         pulse={pulse}
-        onDonate={onDonate}
+        onBuyTicket={onBuyTicket}
         onOpenCreator={onOpenCreator}
         hasUserLocation={hasUserLocation}
-        bottomInset={platesBottomInset}
+        bottomInset={ticketBottomInset}
       />
 
-      {showPlates && stream.plates ? (
-        <PlatesBar
-          plates={stream.plates}
+      {showTicketBar && !ticketsDismissed ? (
+        <TicketBar
+          tickets={streamTickets}
           chefName={stream.chefName}
-          onAddToCart={handleAddToCart}
-          onClose={() => setPlatesDismissed(true)}
+          onAddTicket={handleAddTicket}
+          onClose={() => setTicketsDismissed(true)}
         />
       ) : null}
     </View>

@@ -1,4 +1,4 @@
-import type { LiveStream, PlateOffering } from '../types/live';
+import type { LiveStream, TicketOffering } from '../types/live';
 import type {
   CreatePlateInput,
   CreatePostInput,
@@ -87,7 +87,7 @@ function resolvePlatesFromPost(row: {
     }));
 }
 
-function mapResolvedPlatesToOfferings(plates: ResolvedPlate[]): PlateOffering[] {
+function mapResolvedPlatesToOfferings(plates: ResolvedPlate[]): TicketOffering[] {
   return plates.map((p) => ({
     id: p.id,
     label: p.label,
@@ -142,6 +142,8 @@ export function mapPostToLiveStream(
     readyInMinutes: post.ready_in_minutes,
     isLive: post.is_live && post.status === 'live',
     tags: post.tags ?? [],
+    ticketPrice: Number(post.min_donation),
+    tickets: mapResolvedPlatesToOfferings(resolvedPlates),
     plates: mapResolvedPlatesToOfferings(resolvedPlates),
   };
 }

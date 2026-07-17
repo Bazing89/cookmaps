@@ -1,5 +1,5 @@
 import type { CreateCreatorPlateInput, CreatorPlate } from '../types/creator';
-import type { LiveStream, PlateOffering } from '../types/live';
+import type { LiveStream, TicketOffering } from '../types/live';
 import { fetchAllCreatorPosts } from './creatorPosts';
 import { ensureBunnyCdnHostname } from './bunnyStream';
 import { supabase } from './supabase';
@@ -173,7 +173,7 @@ export async function linkPlatesToPost(postId: string, plateIds: string[]): Prom
   if (error) throw new Error(error.message);
 }
 
-export function creatorPlateToOffering(plate: CreatorPlate): PlateOffering {
+export function creatorPlateToOffering(plate: CreatorPlate): TicketOffering {
   return {
     id: plate.id,
     label: plate.name,

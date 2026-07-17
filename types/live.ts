@@ -32,8 +32,12 @@ export type LiveStream = {
   readyInMinutes: number;
   isLive: boolean;
   tags: string[];
-  /** Plates for sale on this video — shown to viewers at the bottom of the feed */
-  plates?: PlateOffering[];
+  /** Ticket price for live access (falls back to minDonation) */
+  ticketPrice?: number;
+  /** Tickets for sale on this stream — buying grants live access */
+  tickets?: TicketOffering[];
+  /** @deprecated Use tickets */
+  plates?: TicketOffering[];
   /** Number of questions on creator posts */
   commentCount?: number;
 };
@@ -45,8 +49,8 @@ export type DonationTier = {
   perks: string;
 };
 
-/** A plate the chef is selling on this video */
-export type PlateOffering = {
+/** A ticket that grants access to watch a live cooking session */
+export type TicketOffering = {
   id: string;
   label: string;
   description: string;
@@ -55,3 +59,6 @@ export type PlateOffering = {
   quantity?: number | null;
   imageUrl?: string | null;
 };
+
+/** @deprecated Use TicketOffering */
+export type PlateOffering = TicketOffering;

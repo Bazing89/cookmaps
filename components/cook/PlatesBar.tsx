@@ -2,14 +2,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { cookTheme } from '../../theme/cookTheme';
-import type { PlateOffering } from '../../types/live';
+import type { TicketOffering } from '../../types/live';
 
 type Props = {
-  plates: PlateOffering[];
+  tickets: TicketOffering[];
   chefName: string;
-  onAddToCart: (plate: PlateOffering) => void;
+  onAddTicket: (ticket: TicketOffering) => void;
   onClose: () => void;
 };
+
+/** @deprecated Use TicketBar */
+export const PlatesBar = TicketBar;
 
 const textShadow = {
   textShadowColor: 'rgba(0,0,0,0.85)',
@@ -17,14 +20,14 @@ const textShadow = {
   textShadowRadius: 4,
 } as const;
 
-function PlateCard({
-  plate,
+function TicketCard({
+  ticket,
   fullWidth,
-  onAddToCart,
+  onAddTicket,
 }: {
-  plate: PlateOffering;
+  ticket: TicketOffering;
   fullWidth?: boolean;
-  onAddToCart: () => void;
+  onAddTicket: () => void;
 }) {
   return (
     <View
@@ -35,9 +38,9 @@ function PlateCard({
       }}
     >
       <View className="flex-row items-center">
-        {plate.imageUrl ? (
+        {ticket.imageUrl ? (
           <Image
-            source={{ uri: plate.imageUrl }}
+            source={{ uri: ticket.imageUrl }}
             className={`mr-3 rounded-lg bg-white/10 ${fullWidth ? 'h-16 w-16' : 'h-14 w-14'}`}
             resizeMode="cover"
           />
@@ -45,7 +48,7 @@ function PlateCard({
           <View
             className={`mr-3 items-center justify-center rounded-lg bg-white/10 ${fullWidth ? 'h-16 w-16' : 'h-14 w-14'}`}
           >
-            <Ionicons name="restaurant-outline" size={fullWidth ? 24 : 20} color={cookTheme.textMuted} />
+            <Ionicons name="ticket-outline" size={fullWidth ? 24 : 20} color={cookTheme.textMuted} />
           </View>
         )}
         <View className="min-w-0 flex-1 pr-2">
@@ -54,47 +57,47 @@ function PlateCard({
             style={{ fontFamily: 'DMSans_600SemiBold' }}
             numberOfLines={1}
           >
-            {plate.label}
+            {ticket.label}
           </Text>
-          {plate.description ? (
+          {ticket.description ? (
             <Text
               className="mt-0.5 text-[12px]"
               style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
               numberOfLines={fullWidth ? 2 : 1}
             >
-              {plate.description}
+              {ticket.description}
             </Text>
           ) : null}
           <Text
             className="mt-1 text-[14px] text-white"
             style={{ fontFamily: 'DMSans_600SemiBold' }}
           >
-            ${plate.price}
+            ${ticket.price}
           </Text>
         </View>
       </View>
       <Pressable
-        onPress={onAddToCart}
+        onPress={onAddTicket}
         className="mt-3 flex-row items-center justify-center rounded-xl py-2.5"
         style={{ backgroundColor: cookTheme.accent }}
       >
-        <Ionicons name="cart-outline" size={16} color="#fff" />
+        <Ionicons name="ticket-outline" size={16} color="#fff" />
         <Text className="ml-2 text-[14px] text-white" style={{ fontFamily: 'DMSans_600SemiBold' }}>
-          Order now
+          Buy ticket
         </Text>
       </Pressable>
     </View>
   );
 }
 
-function CollapsedChip({ plate }: { plate: PlateOffering }) {
+function CollapsedChip({ ticket }: { ticket: TicketOffering }) {
   return (
     <>
-      {plate.imageUrl ? (
-        <Image source={{ uri: plate.imageUrl }} className="mr-2 h-9 w-9 rounded-lg bg-white/10" resizeMode="cover" />
+      {ticket.imageUrl ? (
+        <Image source={{ uri: ticket.imageUrl }} className="mr-2 h-9 w-9 rounded-lg bg-white/10" resizeMode="cover" />
       ) : (
         <View className="mr-2 h-9 w-9 items-center justify-center rounded-lg bg-white/10">
-          <Ionicons name="restaurant-outline" size={16} color={cookTheme.textMuted} />
+          <Ionicons name="ticket-outline" size={16} color={cookTheme.textMuted} />
         </View>
       )}
       <View className="min-w-0 flex-1">
@@ -103,30 +106,30 @@ function CollapsedChip({ plate }: { plate: PlateOffering }) {
           style={{ fontFamily: 'DMSans_600SemiBold', ...textShadow }}
           numberOfLines={1}
         >
-          {plate.label}
+          {ticket.label}
         </Text>
         <Text className="text-[12px] text-white/90" style={{ fontFamily: 'DMSans_500Medium', ...textShadow }}>
-          ${plate.price}
+          ${ticket.price} · join live
         </Text>
       </View>
     </>
   );
 }
 
-export function PlatesBar({ plates, chefName, onAddToCart, onClose }: Props) {
+export function TicketBar({ tickets, chefName, onAddTicket, onClose }: Props) {
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     setExpanded(false);
-  }, [plates, chefName]);
+  }, [tickets, chefName]);
 
-  if (!plates.length) return null;
+  if (!tickets.length) return null;
 
-  const single = plates.length === 1;
-  const primary = plates[0];
+  const single = tickets.length === 1;
+  const primary = tickets[0];
 
-  const handleAddToCart = (plate: PlateOffering) => {
-    onAddToCart(plate);
+  const handleAddTicket = (ticket: TicketOffering) => {
+    onAddTicket(ticket);
     setExpanded(false);
   };
 
@@ -140,10 +143,10 @@ export function PlatesBar({ plates, chefName, onAddToCart, onClose }: Props) {
           <Pressable
             onPress={() => setExpanded(true)}
             className="min-w-0 flex-1 flex-row items-center px-2.5 py-2"
-            accessibilityLabel="View plates"
+            accessibilityLabel="View tickets"
           >
             {single ? (
-              <CollapsedChip plate={primary} />
+              <CollapsedChip ticket={primary} />
             ) : (
               <>
                 <ScrollView
@@ -152,20 +155,20 @@ export function PlatesBar({ plates, chefName, onAddToCart, onClose }: Props) {
                   className="max-w-[55%]"
                   contentContainerStyle={{ alignItems: 'center', paddingRight: 8 }}
                 >
-                  {plates.map((plate) =>
-                    plate.imageUrl ? (
+                  {tickets.map((ticket) =>
+                    ticket.imageUrl ? (
                       <Image
-                        key={plate.id}
-                        source={{ uri: plate.imageUrl }}
+                        key={ticket.id}
+                        source={{ uri: ticket.imageUrl }}
                         className="mr-1.5 h-9 w-9 rounded-lg bg-white/10"
                         resizeMode="cover"
                       />
                     ) : (
                       <View
-                        key={plate.id}
+                        key={ticket.id}
                         className="mr-1.5 h-9 w-9 items-center justify-center rounded-lg bg-white/10"
                       >
-                        <Ionicons name="restaurant-outline" size={14} color={cookTheme.textMuted} />
+                        <Ionicons name="ticket-outline" size={14} color={cookTheme.textMuted} />
                       </View>
                     ),
                   )}
@@ -176,14 +179,14 @@ export function PlatesBar({ plates, chefName, onAddToCart, onClose }: Props) {
                     style={{ fontFamily: 'DMSans_600SemiBold', ...textShadow }}
                     numberOfLines={1}
                   >
-                    {plates.length} plates · {chefName}
+                    Live tickets · {chefName}
                   </Text>
                   <Text
                     className="text-[11px] text-white/85"
                     style={{ fontFamily: 'DMSans_400Regular', ...textShadow }}
                     numberOfLines={1}
                   >
-                    From ${Math.min(...plates.map((p) => p.price))}
+                    From ${Math.min(...tickets.map((t) => t.price))}
                   </Text>
                 </View>
               </>
@@ -195,7 +198,7 @@ export function PlatesBar({ plates, chefName, onAddToCart, onClose }: Props) {
             hitSlop={8}
             className="h-7 w-7 items-center justify-center rounded-full"
             style={{ backgroundColor: 'rgba(255,255,255,0.12)' }}
-            accessibilityLabel="Hide plates"
+            accessibilityLabel="Hide tickets"
           >
             <Ionicons name="close" size={14} color="#fff" />
           </Pressable>
@@ -210,7 +213,7 @@ export function PlatesBar({ plates, chefName, onAddToCart, onClose }: Props) {
         className="absolute inset-0"
         style={{ backgroundColor: 'rgba(0,0,0,0.72)' }}
         onPress={() => setExpanded(false)}
-        accessibilityLabel="Close plates"
+        accessibilityLabel="Close tickets"
       />
 
       <View
@@ -219,19 +222,19 @@ export function PlatesBar({ plates, chefName, onAddToCart, onClose }: Props) {
       >
         <View className="mb-3 flex-row items-center justify-between">
           <View className="min-w-0 flex-1 flex-row items-center pr-2">
-            <Ionicons name="restaurant-outline" size={16} color={cookTheme.accentSoft} />
+            <Ionicons name="ticket-outline" size={16} color={cookTheme.accentSoft} />
             <Text
               className="ml-2 text-[13px] uppercase tracking-wide text-white"
               style={{ fontFamily: 'DMSans_600SemiBold' }}
               numberOfLines={1}
             >
-              Plates from {chefName}
+              Live tickets · {chefName}
             </Text>
           </View>
           <Pressable
             onPress={() => setExpanded(false)}
             hitSlop={10}
-            accessibilityLabel="Close plates"
+            accessibilityLabel="Close tickets"
             className="h-8 w-8 items-center justify-center rounded-full border border-white/15"
             style={{ backgroundColor: cookTheme.surfaceElevated }}
           >
@@ -240,11 +243,11 @@ export function PlatesBar({ plates, chefName, onAddToCart, onClose }: Props) {
         </View>
 
         {single ? (
-          <PlateCard plate={plates[0]} fullWidth onAddToCart={() => handleAddToCart(plates[0])} />
+          <TicketCard ticket={tickets[0]} fullWidth onAddTicket={() => handleAddTicket(tickets[0])} />
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-            {plates.map((plate) => (
-              <PlateCard key={plate.id} plate={plate} onAddToCart={() => handleAddToCart(plate)} />
+            {tickets.map((ticket) => (
+              <TicketCard key={ticket.id} ticket={ticket} onAddTicket={() => handleAddTicket(ticket)} />
             ))}
           </ScrollView>
         )}

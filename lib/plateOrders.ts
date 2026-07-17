@@ -1,21 +1,22 @@
-import type { ClaimedPlate, OrderStatus } from '../screens/cook/types';
+import type { PurchasedTicket, TicketStatus } from '../screens/cook/types';
 import type { CreatorPost, CreatorProfile, PostPlateLinkRow, PostPlateRow } from '../types/creator';
 import type { LiveStream } from '../types/live';
 import { mapPostToLiveStream } from './creatorPosts';
+import { primaryTicketForStream } from './tickets';
 import { supabase } from './supabase';
 
-export type PlateOrderRow = {
+export type TicketPurchaseRow = {
   id: string;
   buyer_id: string;
   post_id: string;
   plate_id: string | null;
   plate_label: string;
   amount: number;
-  status: OrderStatus;
+  status: string;
   created_at: string;
 };
 
-type OrderWithPost = PlateOrderRow & {
+type PurchaseWithPost = TicketPurchaseRow & {
   creator_posts: CreatorPost & {
     profiles: CreatorProfile;
     post_plates?: PostPlateRow[];
@@ -23,24 +24,30 @@ type OrderWithPost = PlateOrderRow & {
   };
 };
 
-function resolvePlateImage(
-  stream: LiveStream,
-  plateId?: string | null,
-  plateLabel?: string,
-): string | null {
-  const plates = stream.plates ?? [];
-  if (plateId) {
-    const match = plates.find((plate) => plate.id === plateId);
-    if (match?.imageUrl) return match.imageUrl;
-  }
-  if (plateLabel) {
-    const match = plates.find((plate) => plate.label === plateLabel);
-    if (match?.imageUrl) return match.imageUrl;
-  }
-  return null;
+function mapDbStatus(status: string): TicketStatus {
+  if (status === 'cancelled') return 'cancelled';
+  if (status === 'expired') return 'expired';
+  return 'active';
 }
 
-function mapOrderRow(row: OrderWithPost): ClaimedPlate | null {
+function resolveTicketImage(
+  stream: LiveStream,
+  ticketId?: string | null,
+  ticketLabel?: string,
+): string | null {
+  const tickets = stream.tickets ?? stream.plates ?? [];
+  if (ticketId) {
+    const match = tickets.find((ticket) => ticket.id === ticketId);
+    if (match?.imageUrl) return match.imageUrl;
+  }
+  if (ticketLabel) {
+    const match = tickets.find((ticket) => ticket.label === ticketLabel);
+    if (match?.imageUrl) return match.imageUrl;
+  }
+  return stream.coverImage ?? null;
+}
+
+function mapPurchaseRow(row: PurchaseWithPost): PurchasedTicket | null {
   const post = row.creator_posts;
   const profile = post?.profiles;
   if (!post || !profile) return null;
@@ -51,15 +58,15 @@ function mapOrderRow(row: OrderWithPost): ClaimedPlate | null {
     id: row.id,
     stream,
     amount: Number(row.amount),
-    claimedAt: new Date(row.created_at).getTime(),
-    plateId: row.plate_id ?? undefined,
-    plateLabel: row.plate_label,
-    plateImageUrl: resolvePlateImage(stream, row.plate_id, row.plate_label),
-    status: row.status,
+    purchasedAt: new Date(row.created_at).getTime(),
+    ticketId: row.plate_id ?? undefined,
+    ticketLabel: row.plate_label,
+    ticketImageUrl: resolveTicketImage(stream, row.plate_id, row.plate_label),
+    status: mapDbStatus(row.status),
   };
 }
 
-export async function fetchOrderHistory(buyerId: string): Promise<ClaimedPlate[]> {
+export async function fetchTicketHistory(buyerId: string): Promise<PurchasedTicket[]> {
   const { data, error } = await supabase
     .from('plate_orders')
     .select('*, creator_posts(*, profiles(*), post_plates(*), post_plate_links(sort_order, creator_plates(*)))')
@@ -67,29 +74,32 @@ export async function fetchOrderHistory(buyerId: string): Promise<ClaimedPlate[]
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.warn('[plateOrders] fetch failed:', error.message);
+    console.warn('[ticketPurchases] fetch failed:', error.message);
     return [];
   }
 
   return (data ?? [])
-    .map((row) => mapOrderRow(row as OrderWithPost))
-    .filter((order): order is ClaimedPlate => order != null);
+    .map((row) => mapPurchaseRow(row as PurchaseWithPost))
+    .filter((ticket): ticket is PurchasedTicket => ticket != null);
 }
 
-export async function createPlateOrder(input: {
+/** @deprecated Use fetchTicketHistory */
+export const fetchOrderHistory = fetchTicketHistory;
+
+export async function createTicketPurchase(input: {
   buyerId: string;
   postId: string;
-  plateId?: string;
-  plateLabel: string;
+  ticketId?: string;
+  ticketLabel: string;
   amount: number;
-}): Promise<PlateOrderRow | null> {
+}): Promise<TicketPurchaseRow | null> {
   const { data, error } = await supabase
     .from('plate_orders')
     .insert({
       buyer_id: input.buyerId,
       post_id: input.postId,
-      plate_id: input.plateId ?? null,
-      plate_label: input.plateLabel,
+      plate_id: input.ticketId ?? null,
+      plate_label: input.ticketLabel,
       amount: input.amount,
       status: 'confirmed',
     })
@@ -100,5 +110,12 @@ export async function createPlateOrder(input: {
     throw new Error(error.message);
   }
 
-  return data as PlateOrderRow;
+  return data as TicketPurchaseRow;
+}
+
+/** @deprecated Use createTicketPurchase */
+export const createPlateOrder = createTicketPurchase;
+
+export function ticketFromStream(stream: LiveStream) {
+  return primaryTicketForStream(stream);
 }

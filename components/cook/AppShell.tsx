@@ -13,18 +13,19 @@ import { GoLiveScreen } from '../../screens/cook/GoLiveScreen';
 import { LoginScreen } from '../../screens/cook/LoginScreen';
 import { MapScreen } from '../../screens/cook/MapScreen';
 import { ProfileScreen } from '../../screens/cook/ProfileScreen';
-import type { CartItem, ClaimedPlate } from '../../screens/cook/types';
-import { createPlateOrder, fetchOrderHistory } from '../../lib/plateOrders';
+import type { CartItem, PurchasedTicket } from '../../screens/cook/types';
+import { createTicketPurchase, fetchTicketHistory } from '../../lib/plateOrders';
+import { primaryTicketForStream } from '../../lib/tickets';
 import { cookTheme } from '../../theme/cookTheme';
-import type { LiveStream, PlateOffering, TabId } from '../../types/live';
+import type { LiveStream, TabId, TicketOffering } from '../../types/live';
 
 type CreatorOverlay = {
   creatorKey: string;
   startPostId?: string;
 };
 
-function cartItemKey(streamId: string, plateId: string) {
-  return `${streamId}:${plateId}`;
+function cartItemKey(streamId: string, ticketId: string) {
+  return `${streamId}:${ticketId}`;
 }
 
 export function AppShell() {
@@ -33,26 +34,27 @@ export function AppShell() {
   const { height, width } = useWindowDimensions();
   const [activeTab, setActiveTab] = useState<TabId>('live');
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [orders, setOrders] = useState<ClaimedPlate[]>([]);
-  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [tickets, setTickets] = useState<PurchasedTicket[]>([]);
+  const [ticketsLoading, setTicketsLoading] = useState(false);
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [cartView, setCartView] = useState<'cart' | 'orders'>('cart');
   const [creatorOverlay, setCreatorOverlay] = useState<CreatorOverlay | null>(null);
+  const [focusStreamId, setFocusStreamId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
-      setOrders([]);
+      setTickets([]);
       return;
     }
 
     let cancelled = false;
-    setOrdersLoading(true);
-    fetchOrderHistory(user.id)
+    setTicketsLoading(true);
+    fetchTicketHistory(user.id)
       .then((history) => {
-        if (!cancelled) setOrders(history);
+        if (!cancelled) setTickets(history);
       })
       .finally(() => {
-        if (!cancelled) setOrdersLoading(false);
+        if (!cancelled) setTicketsLoading(false);
       });
 
     return () => {
@@ -60,10 +62,10 @@ export function AppShell() {
     };
   }, [user]);
 
-  const addToCart = useCallback((stream: LiveStream, plate: PlateOffering) => {
+  const addTicketToCart = useCallback((stream: LiveStream, ticket: TicketOffering) => {
     setCartItems((prev) => {
-      const key = cartItemKey(stream.id, plate.id);
-      if (prev.some((item) => cartItemKey(item.stream.id, item.plateId) === key)) {
+      const key = cartItemKey(stream.id, ticket.id);
+      if (prev.some((item) => cartItemKey(item.stream.id, item.ticketId) === key)) {
         return prev;
       }
       return [
@@ -71,10 +73,10 @@ export function AppShell() {
         {
           id: `cart-${key}-${Date.now()}`,
           stream,
-          plateId: plate.id,
-          plateLabel: plate.label,
-          plateImageUrl: plate.imageUrl ?? null,
-          amount: plate.price,
+          ticketId: ticket.id,
+          ticketLabel: ticket.label,
+          ticketImageUrl: ticket.imageUrl ?? null,
+          amount: ticket.price,
         },
       ];
     });
@@ -86,55 +88,61 @@ export function AppShell() {
     setCartItems((prev) => prev.filter((item) => item.id !== cartItemId));
   }, []);
 
-  const placeOrder = useCallback(
-    async (stream: LiveStream, amount: number, plateId?: string, plateLabel?: string) => {
+  const purchaseTicket = useCallback(
+    async (
+      stream: LiveStream,
+      amount: number,
+      ticketId?: string,
+      ticketLabel?: string,
+    ) => {
       const label =
-        plateLabel ??
-        stream.plates?.find((plate) => plate.id === plateId)?.label ??
-        `Plate · $${amount}`;
+        ticketLabel ??
+        stream.tickets?.find((ticket) => ticket.id === ticketId)?.label ??
+        primaryTicketForStream(stream).label;
 
-      const optimistic: ClaimedPlate = {
+      const optimistic: PurchasedTicket = {
         id: `temp-${stream.id}-${Date.now()}`,
         stream,
         amount,
-        claimedAt: Date.now(),
-        plateId,
-        plateLabel: label,
-        plateImageUrl:
-          stream.plates?.find((plate) => plate.id === plateId)?.imageUrl ??
-          stream.plates?.find((plate) => plate.label === label)?.imageUrl ??
+        purchasedAt: Date.now(),
+        ticketId,
+        ticketLabel: label,
+        ticketImageUrl:
+          stream.tickets?.find((ticket) => ticket.id === ticketId)?.imageUrl ??
+          stream.tickets?.find((ticket) => ticket.label === label)?.imageUrl ??
+          stream.coverImage ??
           null,
-        status: 'confirmed',
+        status: 'active',
       };
 
-      setOrders((prev) => [optimistic, ...prev]);
+      setTickets((prev) => [optimistic, ...prev]);
 
       if (!user) return optimistic;
 
       try {
-        const row = await createPlateOrder({
+        const row = await createTicketPurchase({
           buyerId: user.id,
           postId: stream.id,
-          plateId,
-          plateLabel: label,
+          ticketId,
+          ticketLabel: label,
           amount,
         });
 
         if (row) {
-          setOrders((prev) =>
-            prev.map((order) =>
-              order.id === optimistic.id
+          setTickets((prev) =>
+            prev.map((ticket) =>
+              ticket.id === optimistic.id
                 ? {
-                    ...order,
+                    ...ticket,
                     id: row.id,
-                    claimedAt: new Date(row.created_at).getTime(),
+                    purchasedAt: new Date(row.created_at).getTime(),
                   }
-                : order,
+                : ticket,
             ),
           );
         }
       } catch (e) {
-        console.warn('[AppShell] save order failed:', e);
+        console.warn('[AppShell] save ticket failed:', e);
       }
 
       return optimistic;
@@ -148,7 +156,7 @@ export function AppShell() {
     setCheckoutBusy(true);
     try {
       for (const item of cartItems) {
-        await placeOrder(item.stream, item.amount, item.plateId, item.plateLabel);
+        await purchaseTicket(item.stream, item.amount, item.ticketId, item.ticketLabel);
       }
       setCartItems([]);
       setCartView('orders');
@@ -156,7 +164,12 @@ export function AppShell() {
     } finally {
       setCheckoutBusy(false);
     }
-  }, [cartItems, placeOrder]);
+  }, [cartItems, purchaseTicket]);
+
+  const joinLive = useCallback((streamId: string) => {
+    setFocusStreamId(streamId);
+    setActiveTab('live');
+  }, []);
 
   const onOpenCreator = useCallback((creatorKey: string, postId?: string) => {
     setCreatorOverlay({ creatorKey, startPostId: postId });
@@ -182,10 +195,19 @@ export function AppShell() {
   let content: ReactNode;
   switch (activeTab) {
     case 'live':
-      content = <FeedScreen onAddToCart={addToCart} onOpenCreator={onOpenCreator} />;
+      content = (
+        <FeedScreen
+          onAddTicket={addTicketToCart}
+          onOpenCreator={onOpenCreator}
+          purchasedTickets={tickets}
+          viewerId={user.id}
+          focusStreamId={focusStreamId}
+          onFocusStreamHandled={() => setFocusStreamId(null)}
+        />
+      );
       break;
     case 'map':
-      content = <MapScreen plates={orders} onAddToCart={addToCart} />;
+      content = <MapScreen tickets={tickets} onAddTicket={addTicketToCart} />;
       break;
     case 'go-live':
       content = <GoLiveScreen />;
@@ -194,13 +216,14 @@ export function AppShell() {
       content = (
         <CartScreen
           cartItems={cartItems}
-          orders={orders}
-          ordersLoading={ordersLoading}
+          tickets={tickets}
+          ticketsLoading={ticketsLoading}
           checkoutBusy={checkoutBusy}
           view={cartView}
           onViewChange={setCartView}
           onRemoveFromCart={removeFromCart}
           onCheckout={() => void checkoutCart()}
+          onJoinLive={joinLive}
         />
       );
       break;
@@ -242,15 +265,7 @@ export function AppShell() {
                   startPostId={creatorOverlay.startPostId}
                   onBack={() => setCreatorOverlay(null)}
                   onDonate={(stream) => {
-                    const plate = stream.plates?.[0];
-                    if (plate) addToCart(stream, plate);
-                    else
-                      addToCart(stream, {
-                        id: `default-${stream.id}`,
-                        label: `Plate · $${stream.minDonation}`,
-                        description: stream.dishDescription,
-                        price: stream.minDonation,
-                      });
+                    addTicketToCart(stream, primaryTicketForStream(stream));
                   }}
                 />
               </View>

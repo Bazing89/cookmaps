@@ -324,7 +324,7 @@ export function CreatorProfileScreen({ creatorKey, startPostId, onBack, onDonate
                     return next;
                   })
                 }
-                onDonate={() => onDonate?.(item)}
+                onBuyTicket={() => onDonate?.(item)}
                 onAsk={() => setCommentStream(item)}
                 commentCount={commentCounts[item.id] ?? 0}
               />

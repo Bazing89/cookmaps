@@ -298,31 +298,21 @@ export function ProfileScreen() {
         </Pressable>
       </View>
 
-      {loading && profileTab === 'videos' ? (
+      {loading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color={cookTheme.accent} size="large" />
         </View>
       ) : (
-        <FlatList<LiveStream | CreatorPlate>
-          key={profileTab}
-          data={profileTab === 'videos' ? displayStreams : catalogPlates}
+        <FlatList<LiveStream>
+          data={displayStreams}
           keyExtractor={(item) => item.id}
-          numColumns={profileTab === 'videos' ? 3 : 2}
-          columnWrapperStyle={
-            profileTab === 'videos'
-              ? {
-                  gap: gridGap,
-                  marginBottom: gridGap,
-                  width: cellSize * 3 + gridGap * 2,
-                  alignSelf: 'center',
-                }
-              : {
-                  gap: gridGap,
-                  marginBottom: gridGap,
-                  width: plateCellSize * 2 + gridGap,
-                  alignSelf: 'center',
-                }
-          }
+          numColumns={3}
+          columnWrapperStyle={{
+            gap: gridGap,
+            marginBottom: gridGap,
+            width: cellSize * 3 + gridGap * 2,
+            alignSelf: 'center',
+          }}
           contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomNavInset + 16 }}
           onScrollBeginDrag={() => setGridMenuId(null)}
           ListHeaderComponent={
@@ -397,123 +387,45 @@ export function ProfileScreen() {
 
               <View className="mt-5 flex-row gap-8">
                 <Stat label="Videos" value={String(streams.length)} />
-                <Stat label="Plates" value={String(catalogPlates.length)} />
+                <Stat label="Live" value={String(streams.filter((s) => s.isLive).length)} />
                 <Stat label="Likes" value={formatCount(totalLikes)} />
               </View>
 
               <View className="mt-6 w-full flex-row border-b border-white/10">
-                {(['videos', 'plates'] as const).map((tab) => {
-                  const active = profileTab === tab;
-                  return (
-                    <Pressable
-                      key={tab}
-                      onPress={() => setProfileTab(tab)}
-                      className="flex-1 items-center border-b-2 pb-2 pt-1"
-                      style={{ borderColor: active ? cookTheme.accent : 'transparent' }}
-                    >
-                      <Ionicons
-                        name={tab === 'videos' ? 'grid-outline' : 'restaurant-outline'}
-                        size={20}
-                        color={active ? '#fff' : cookTheme.textMuted}
-                      />
-                      <Text
-                        className="mt-1 text-[11px] capitalize"
-                        style={{
-                          fontFamily: active ? 'DMSans_600SemiBold' : 'DMSans_400Regular',
-                          color: active ? '#fff' : cookTheme.textMuted,
-                        }}
-                      >
-                        {tab}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              {profileTab === 'plates' ? (
-                <Pressable
-                  onPress={() => setCreatePlateOpen(true)}
-                  className="mt-4 w-full flex-row items-center justify-center rounded-2xl border border-dashed border-white/15 py-3"
-                  style={{ backgroundColor: cookTheme.surfaceElevated }}
+                <View
+                  className="flex-1 items-center border-b-2 pb-2 pt-1"
+                  style={{ borderColor: cookTheme.accent }}
                 >
-                  <Ionicons name="add-circle-outline" size={20} color={cookTheme.accentSoft} />
-                  <Text className="ml-2 text-[14px] text-white" style={{ fontFamily: 'DMSans_600SemiBold' }}>
-                    Create plate
+                  <Ionicons name="grid-outline" size={20} color="#fff" />
+                  <Text
+                    className="mt-1 text-[11px]"
+                    style={{ fontFamily: 'DMSans_600SemiBold', color: '#fff' }}
+                  >
+                    Videos
                   </Text>
-                </Pressable>
-              ) : null}
+                </View>
+              </View>
             </View>
           }
           ListEmptyComponent={
-            profileTab === 'videos' ? (
-              <View className="mt-6 items-center px-6">
-                <Ionicons name="videocam-outline" size={40} color={cookTheme.textMuted} />
-                <Text
-                  className="mt-3 text-center text-[15px] text-white"
-                  style={{ fontFamily: 'DMSans_500Medium' }}
-                >
-                  No videos yet
-                </Text>
-                <Text
-                  className="mt-1 text-center text-[13px] leading-5"
-                  style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
-                >
-                  Post a short or go live from the Cook tab to fill your profile.
-                </Text>
-              </View>
-            ) : platesLoading ? (
-              <View className="mt-8 items-center">
-                <ActivityIndicator color={cookTheme.accent} />
-              </View>
-            ) : (
-              <View className="mt-6 items-center px-6">
-                <Ionicons name="restaurant-outline" size={40} color={cookTheme.textMuted} />
-                <Text
-                  className="mt-3 text-center text-[15px] text-white"
-                  style={{ fontFamily: 'DMSans_500Medium' }}
-                >
-                  No plates yet
-                </Text>
-                <Text
-                  className="mt-1 text-center text-[13px] leading-5"
-                  style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
-                >
-                  Tap Create plate to add what you are selling — then attach plates when you post a short.
-                </Text>
-              </View>
-            )
+            <View className="mt-6 items-center px-6">
+              <Ionicons name="videocam-outline" size={40} color={cookTheme.textMuted} />
+              <Text
+                className="mt-3 text-center text-[15px] text-white"
+                style={{ fontFamily: 'DMSans_500Medium' }}
+              >
+                No videos yet
+              </Text>
+              <Text
+                className="mt-1 text-center text-[13px] leading-5"
+                style={{ fontFamily: 'DMSans_400Regular', color: cookTheme.textMuted }}
+              >
+                Post a short or go live from the Cook tab — set a ticket price so viewers can watch you cook.
+              </Text>
+            </View>
           }
           renderItem={({ item, index }) => {
-            if (profileTab === 'plates') {
-              const plate = item as CreatorPlate;
-              return (
-                <View
-                  style={{
-                    width: plateCellSize,
-                    height: plateCellSize * 1.15,
-                    marginBottom: gridGap,
-                  }}
-                >
-                  {plate.image_url ? (
-                    <Image source={{ uri: plate.image_url }} className="h-full w-full rounded-xl" resizeMode="cover" />
-                  ) : (
-                    <View className="h-full w-full items-center justify-center rounded-xl bg-white/5">
-                      <Ionicons name="restaurant-outline" size={28} color={cookTheme.textMuted} />
-                    </View>
-                  )}
-                  <View className="absolute bottom-0 left-0 right-0 rounded-b-xl px-2 py-2" style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}>
-                    <Text className="text-[12px] text-white" style={{ fontFamily: 'DMSans_600SemiBold' }} numberOfLines={1}>
-                      {plate.name}
-                    </Text>
-                    <Text className="text-[11px] text-white/85" style={{ fontFamily: 'DMSans_500Medium' }}>
-                      ${Number(plate.price)}
-                    </Text>
-                  </View>
-                </View>
-              );
-            }
-
-            const stream = item as LiveStream;
+            const stream = item;
             const isDeleting = deletingId === stream.id;
             const menuOpen = gridMenuId === stream.id;
             return (
@@ -640,7 +552,7 @@ export function ProfileScreen() {
                     return next;
                   })
                 }
-                onDonate={() => {}}
+                onBuyTicket={() => {}}
                 onAsk={() => setCommentStream(item)}
                 commentCount={commentCounts[item.id] ?? 0}
               />
