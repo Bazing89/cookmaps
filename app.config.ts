@@ -18,6 +18,7 @@ const config: ExpoConfig = {
   },
   ios: {
     supportsTablet: true,
+    buildNumber: '1',
     bundleIdentifier: 'com.cookmapz.app',
     config: {
       googleMapsApiKey,
@@ -29,6 +30,7 @@ const config: ExpoConfig = {
     },
   },
   android: {
+    versionCode: 1,
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#0B0B0C',
