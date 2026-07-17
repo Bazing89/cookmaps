@@ -6,11 +6,18 @@
 import { ensureBunnyCdnHostname } from './bunnyStream';
 
 const BUNNY_STREAM_BASE = 'https://video.bunnycdn.com';
-const apiKey = process.env.EXPO_PUBLIC_BUNNY_STREAM_API_KEY ?? '';
+const apiKey =
+  process.env.EXPO_PUBLIC_BUNNY_LIVE_API_KEY?.trim() ||
+  process.env.EXPO_PUBLIC_BUNNY_STREAM_API_KEY?.trim() ||
+  '';
 
 /** Library 706984 — dedicated live streaming library. */
 export const bunnyLiveLibraryId =
   process.env.EXPO_PUBLIC_BUNNY_LIVE_LIBRARY_ID?.trim() || '706984';
+
+export const bunnyLiveCdnHostname =
+  process.env.EXPO_PUBLIC_BUNNY_LIVE_CDN_HOSTNAME?.trim().replace(/^https?:\/\//, '') ||
+  '';
 
 export const isBunnyLiveConfigured = Boolean(apiKey && bunnyLiveLibraryId);
 
@@ -56,7 +63,7 @@ async function liveFetch<T>(path: string, init?: RequestInit): Promise<T> {
     const body = await res.text();
     if (res.status === 401) {
       throw new Error(
-        'Bunny Live API 401: use the Stream library API key for library 706984 (Stream → library → API).',
+        `Bunny Live API 401: use EXPO_PUBLIC_BUNNY_LIVE_API_KEY for library ${bunnyLiveLibraryId} (Stream → library → API).`,
       );
     }
     throw new Error(`Bunny Live API ${res.status}: ${body || res.statusText}`);
@@ -91,7 +98,7 @@ export async function createBunnyLiveStream(input: {
 }): Promise<BunnyLiveStream> {
   if (!isBunnyLiveConfigured) {
     throw new Error(
-      'Bunny Live is not configured. Add EXPO_PUBLIC_BUNNY_STREAM_API_KEY to .env (library 706984), then restart Expo.',
+      'Bunny Live is not configured. Add EXPO_PUBLIC_BUNNY_LIVE_API_KEY and EXPO_PUBLIC_BUNNY_LIVE_LIBRARY_ID to .env, then restart Expo.',
     );
   }
 

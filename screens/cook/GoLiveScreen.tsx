@@ -222,7 +222,7 @@ export function GoLiveScreen() {
     }
     if (!isBunnyLiveConfigured) {
       setError(
-        'Bunny Live is not configured. Add EXPO_PUBLIC_BUNNY_STREAM_API_KEY to .env (library 706984), then restart Expo.',
+        'Bunny Live is not configured. Add EXPO_PUBLIC_BUNNY_LIVE_API_KEY and EXPO_PUBLIC_BUNNY_LIVE_LIBRARY_ID to .env, then restart Expo.',
       );
       return;
     }
@@ -273,7 +273,7 @@ export function GoLiveScreen() {
         playbackUrlHls: activeLive.playbackUrlHls,
       });
       setMessage(
-        'Live stream created on Bunny (library 706984). Connect OBS/Larix, then ticket holders can join from For You.',
+        `Live stream created on Bunny (library ${bunnyLiveLibraryId}). Connect OBS/Larix, then ticket holders can join from For You.`,
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not go live');

@@ -1,5 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
+  // Worker name must match Cloudflare dashboard (cookmapz).
+  // dist/ must exist before deploy — run: npm run build:web  (or npm run deploy:cloudflare)
   "name": "cookmapz",
   "compatibility_date": "2026-07-16",
   "assets": {
