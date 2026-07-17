@@ -49,7 +49,7 @@ We do not sell your personal data. We share data with service providers (hosting
 
 Your choices
 • You can disable location in device settings
-• You can sign out or request account deletion by contacting support
+• You can sign out anytime, or delete your account from Settings → Account
 
 Contact: privacy@cookmapz.app`;
 

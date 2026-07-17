@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { SettingsRow, SettingsSection } from './SettingsRow';
 import { useAuth } from '../../contexts/AuthContext';
+import { deleteAccount } from '../../lib/account';
+import { confirmDestructive, showAlert } from '../../lib/confirmAction';
 import { LegalDocumentScreen } from '../../screens/cook/LegalDocumentScreen';
 import { EditProfileScreen } from '../../screens/cook/EditProfileScreen';
 import { PaymentMethodsScreen } from '../../screens/cook/PaymentMethodsScreen';
@@ -54,6 +56,29 @@ export function ProfileSettingsMenu({ visible, onClose }: Props) {
     await signOut();
     setBusy(false);
     closeAll();
+  }, [closeAll, signOut]);
+
+  const onDeleteAccount = useCallback(async () => {
+    const confirmed = await confirmDestructive(
+      'Delete account?',
+      'This permanently removes your profile, videos, plates, and order history. This cannot be undone.',
+      'Delete account',
+    );
+    if (!confirmed) return;
+
+    setBusy(true);
+    try {
+      await deleteAccount();
+      await signOut();
+      closeAll();
+    } catch (e) {
+      showAlert(
+        'Could not delete account',
+        e instanceof Error ? e.message : 'Something went wrong. Try again or contact support.',
+      );
+    } finally {
+      setBusy(false);
+    }
   }, [closeAll, signOut]);
 
   if (!visible && panel === null) return null;
@@ -159,6 +184,13 @@ Full license texts are available in the app's repository under node_modules and 
               subtitle="Name, handle, avatar"
               icon="person-outline"
               onPress={() => setPanel('edit-profile')}
+            />
+            <SettingsRow
+              label="Delete account"
+              subtitle="Permanently remove your profile and data"
+              icon="trash-outline"
+              destructive
+              onPress={() => void onDeleteAccount()}
             />
           </SettingsSection>
 
